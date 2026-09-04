@@ -119,7 +119,12 @@ OLD+NEW as two searches · OLD+NEW interleaved · insert · **q**. **No longer g
 reclamation grounds instead (`../design/01-resolver.md` §3). T3.1's exit criterion is therefore whether
 the **search and memory cost of two epochs is acceptable in exchange for whole-epoch
 reclamation** — not whether it is faster. Requires the two-epoch prototype with death-driven
-rotation. **~3 days.**
+rotation **and a real demand-driven floor, not an injected schedule**: the behaviour under
+test is what a live floor does — plateaus while a reader holds it, jumps when one finishes,
+and the rate of sub-X retirements those produce — and a synthetic schedule only reproduces
+the shapes chosen in advance, which is what invalidated the first two runs of T3.3. **T3.1
+therefore comes after the floor protocol is implemented**, not alongside it. **~3 days**
+once that prerequisite exists.
 
 **T3.2 · Lookup neutrality (`../design/01-resolver.md` R42).** Model **both modes** (`../design/01-resolver.md` §2.a):
 single-epoch accumulation to X — **triggered by allocation, so a pair can form during a floor
