@@ -1,0 +1,4 @@
+# Local working notes: code-anchored maps, audits and implementation guides.
+# Kept out of the published repo on purpose — they cite file:line of the fork
+# and are revised continuously.
+docs-local/
