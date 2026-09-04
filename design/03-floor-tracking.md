@@ -86,8 +86,10 @@ This is the one place the protocol depends on time rather than on fencing, and i
 stating plainly: elsewhere (barrier release, §4a) timers are explicitly *not* evidence. The
 same guarantee could be obtained by a non-temporal fencing mechanism instead.
 
-**Decision for v1: the temporal contract above is frozen, not left open.** It is fully
-specified, it is the standard lease argument, and its failure direction is availability rather
+**Decision for v1: the temporal *rule* above is frozen, not left open.** Its parameters are
+not — the exact inequality between server lease duration, client window and maximum clock
+drift belongs to §8.1, and is unset until F0 sizes it. The rule is the standard lease
+argument, and its failure direction is availability rather
 than safety; leaving it open would block Phase A on a decision that already has a working
 default. A non-temporal replacement remains a possible later change — it is not one of the
 open choices in §8. Without one of the two, register-before-use protects only the instant of
@@ -159,7 +161,7 @@ primitive as the Commit Proxy side (§4a):
 ```
 conditionalInstallClientMinimum(sourceGeneration, publicationSequence,
                                 candidateMinimum, requiredReadVersion,
-                                authoritativeStorageRetentionFloor)
+                                authoritativeStorageAdmissionFloor)
 ```
 
 installing atomically, with **the GRV reply sent only after the acknowledgement**. It may share
@@ -171,12 +173,40 @@ machinery with `conditionalInstallProxyMinimum`; what it may not be is eventual 
 > `clientOldestActiveRV < currentVersion − W_commit`. Guarding it with the resolver's effective
 > floor would make any reader older than `W_commit` unable to reinstall its contribution — on
 > landing at another GRV proxy, or during recovery — which destroys the extended read window
-> this project exists to provide. The guards are therefore per consumer:
+> this project exists to provide.
+>
+> **Nor is physical retention the right guard.** "The bytes still exist" is not "it is still
+> lawful to promise them":
+>
+> ```
+> publishedGlobalOldestClientRV      = 200      // already published, and monotone
+> authoritativeStorageRetentionFloor = 100      // Storage happens to still over-retain
+> candidateMinimum                   = 150
+> ```
+>
+> A guard against physical retention lets this install win, yet publication cannot retreat:
+> `publishedFloor = max(200, 150) = 200`, so Storage remains authorised to reclaim to 200 and
+> the lease was granted with no real protection. An advance order to 200 may even be in flight
+> already. The authority is therefore **`authoritativeStorageAdmissionFloor`** — the greatest
+> reclamation floor already made irreversible or authorised/published to any Storage Server:
 >
 > | Install | Wins only if |
 > |---|---|
-> | `conditionalInstallClientMinimum` | Storage still retains `requiredReadVersion` — i.e. against `authoritativeStorageRetentionFloor`, and only the explicit revocation protocol may take it away (§6, `02-storage.md` §5) |
-> | `conditionalInstallProxyMinimum` | `authoritativeResolverEffectiveFloor = max(globalValidationDemand, authoritativeCurrentVersion − W_commit)` has not passed it |
+> | `conditionalInstallClientMinimum` | `requiredReadVersion ≥ authoritativeStorageAdmissionFloor`, installing the contribution in the same transition, before that authorisation can advance |
+> | `conditionalInstallProxyMinimum` | `requiredReadVersion ≥ authoritativeResolverEffectiveFloor = max(globalValidationDemand, authoritativeCurrentVersion − W_commit)` |
+>
+> Physical `minimumRetainedVersion` (`02-storage.md`) remains useful for best-effort
+> `setVersion()` and for diagnostics; it is not authority to grant a new guarantee.
+>
+> *The alternative — reopening the demand floor whenever every Storage Server can prove it
+> still holds `r`, cancelling any advance already dispatched — needs a new distributed protocol
+> and breaks the simplicity of I3. Not justified.*
+>
+> **This composes with the lease contract (§2).** If another valid copy still protects the
+> client, the admission floor cannot have passed `r`. If every copy expired, the client should
+> already have revoked locally, and refusing reinstallation is the correct answer. During GRV
+> proxy failure the generation barrier prevents the admission floor from advancing before
+> coverage is rebuilt.
 
 **When coordination is needed.** What is installed is not the freshly granted read version but
 `candidateMinimum = min(clientOldestActiveRV, newlyGrantedRV)`, so a new *grant* does not imply
@@ -441,7 +471,9 @@ overlap, not from each source being monotone on its own:
 5. Therefore no contribution `≤ r` ever vanishes while `r` is still needed.
 6. A commit whose `r` is below the authoritative effective floor is rejected.
 
-Publication is monotone by construction: `publishedFloor = max(previousPublishedFloor,
+Publication is monotone by construction — **of the floors published irreversibly to
+consumers**, not of the source minima, which legitimately fall when a new contribution
+installs: `publishedFloor = max(previousPublishedFloor,
 newlyDerivedFloor)`.
 
 ### Identity is for the leases, not for the handoff
