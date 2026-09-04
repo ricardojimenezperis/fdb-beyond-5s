@@ -232,35 +232,57 @@ executable invariant that will fire if upstream ever relaxes the ordering.
 > (`ServerKnobs.cpp:855`) and `RESET_MASTER_BATCHES` / `RESET_RESOLVER_BATCHES` are diagnostics,
 > not limits.
 
-### 4.2a The fast path: most commits need no coordination
+### 4.2a One transition: propose, install, and learn the rejection threshold
 
 The reduction is cheap. What is expensive is **linearising a lowered contribution against the
-floor advance**, because that is a network interaction on the commit path. Distinguish:
+floor advance**, because that is a network interaction on the commit path. Three quantities,
+named apart because conflating them is what produced two incompatible algorithms in earlier
+drafts:
 
-- `localMinimum` — the exact minimum of the deque;
-- `acknowledgedProxyMinimum` — the last contribution whose global installation is confirmed
-  and not yet withdrawn.
+- `proposedBatchMinimum` (`p`) — the minimum `read_snapshot` over the transactions that
+  actually entered the batch, accumulated in `commitBatcher` after its own limits. It is a
+  *proposal*: it precedes any authoritative filtering.
+- `authoritativeEffectiveFloor` (`F`) — `max(publishedGlobalValidationDemand,
+  authoritativeCurrentVersion − W_commit)`, known only at the authority.
+- `installedProxyMinimum` — what the authority actually installed: `p` exactly when `p ≥ F`,
+  and `F` conservatively when `p < F`.
+
+**The whole exchange is one transition inside the sequencer's non-suspending stretch, and there
+is no retry**:
 
 ```cpp
-const Version effectiveFloor = std::max(lastPublishedGlobalFloor,
-                                        currentVersion - MAX_WRITE_TRANSACTION_LIFE_VERSIONS);
-
-if (batchOldestReadSnapshot < effectiveFloor) {
-    preRejectAsTooOld();                       // conservative pre-filter
-} else if (batchOldestReadSnapshot >= acknowledgedProxyMinimum) {
-    admitWithoutCoordination();                // installed contribution already covers it
+// at the Commit Proxy, before sending
+if (p >= acknowledgedProxyMinimum) {
+    installedMinimum = acknowledgedProxyMinimum;   // existing contribution already covers p
 } else {
-    installLowerProxyMinimumAndAwaitAck();     // the only slow path
-    admit();
+    // inside the sequencer's atomic stretch
+    installedMinimum = std::max(p, F);
+    installProxyMinimum(installedMinimum);
 }
+reply.authoritativeEffectiveFloor = F;
+reply.acknowledgedProxyMinimum    = installedMinimum;
 ```
 
-If `b ≥ acknowledgedProxyMinimum` the installed contribution is at least as conservative, so
-**the demand-derived component of the floor cannot have passed `b`** — no round trip at all.
-Read versions cluster near `now`, so this is the common case.
+and **after the reply** the proxy rejects individually every transaction with
+`read_snapshot < F`.
 
-**The guarantee covers only that component.** `currentVersion − W_commit` can still overtake
-`b` in transit: with `acknowledgedProxyMinimum = 100`, `b = 120` and
+**Why that covers every case.**
+
+| Case | Installed | Coverage |
+|---|---|---|
+| `p ≥ acknowledgedProxyMinimum` | nothing new | `acknowledged ≤ p ≤ read_snapshot` for all of them |
+| `p ≥ F` | `p` | exact; covers the whole batch |
+| `p < F` | `F` | every survivor has `read_snapshot ≥ F` |
+| `p < F`, no survivors | `F` | over-retains only until that batch retires |
+
+So a contaminated proposal is rejected **as an exact minimum** while the same transition still
+installs conservative coverage for whatever survives, and the reply states the rejection
+threshold explicitly. **This is not the silent substitution forbidden on the GRV path** (§11):
+the Commit Proxy is told `F` and rejects each commit that fell outside it. On the *client*
+path, raising a reported floor silently remains illegal.
+
+**The guarantee covers only the demand-derived component.** `currentVersion − W_commit` can
+still overtake `p` in transit: with `acknowledgedProxyMinimum = 100`, `p = 120` and
 `currentVersion − W_commit = 130`, the resolver's floor is 130 even though the proxy holds a
 contribution at 100. That is today's behaviour preserved — a transaction can become too old
 while travelling — and it is why the resolver stays authoritative (§4.2b).
@@ -269,35 +291,17 @@ When the deque advances to a **higher** minimum, publication may be deferred:
 `acknowledgedProxyMinimum < localMinimum` only over-retains, and it keeps later batches covered
 without coordination.
 
-**Installation must be conditional, not a send.** The floor can advance between the proxy's
-test and the arrival of its update, so the aggregator does a compare-and-set:
+**The install is a compare-and-set, not a send**, and it compares against the effective floor
+rather than the demand minimum alone: testing only the demand component would admit batches the
+age bound has already overtaken, which then travel to the resolver just to be rejected. Winning
+the install means admissible *at that instant*. Without this the proxy's own test is a
+time-of-check/time-of-use gap and a batch can be admitted under a floor that has already passed
+it.
 
-```cpp
-InstallResult conditionalInstallProxyMinimum(
-        ProxyID proxy, Generation generation, PublicationSequence sequence,
-        Version candidateMinimum, Version requiredReadVersion) {
-    // runs at the authority that publishes the floor
-    const Version authoritativeEffectiveFloor =
-        std::max(publishedGlobalValidationDemand,
-                 authoritativeCurrentVersion - MAX_WRITE_TRANSACTION_LIFE_VERSIONS);
-    if (authoritativeEffectiveFloor > requiredReadVersion) return TooOld;   // proxy rejects
-    installOrLowerSourceMinimum(proxy, generation, sequence, candidateMinimum);
-    return Installed;                                                        // then acknowledge
-}
-```
-
-For a batch: `candidateMinimum = requiredReadVersion = min(read_snapshot)` over the commits
-that survived the pre-filter, so every admitted commit satisfies
-`read_snapshot ≥ candidateMinimum ≥ authoritativeEffectiveFloor`.
-
-**Compare against the effective floor, not the demand minimum alone.** The resolver's floor is
-`max(demand, currentVersion − W_commit)`; testing only the demand component would admit
-batches the age bound has already overtaken, which then travel to the resolver just to be
-rejected. Winning the install means admissible *at that instant* — the time term can still
-overtake the batch afterwards, exactly as today.
-
-Without this the proxy's own test is a time-of-check/time-of-use gap and a batch can be
-admitted under a floor that has already passed it.
+**The cost of the common path** is no additional round trip, no additional traversal and no
+scheduling dependency — the fields ride a request the proxy already sends and awaits, and `p`
+is already accumulated. What it does add is a small amount of computation at the authority,
+which is exactly what the dark step (§18 step 5) exists to measure.
 
 **Acknowledgements carry `{proxyGeneration, publicationSequence, coveredThroughBatch}`, and
 stale ones are discarded**, so a late acknowledgement of a *raise* cannot overwrite a lower
@@ -569,25 +573,11 @@ explicitly rather than assumed from "the master is the generation":
    irreversible publication to Storage Servers. If another component publishes, it must
    acknowledge the publication before the sequencer treats the advance as authorised.
 
-**A lowering install is a *proposal*, and its rejection must not fail the batch.** The minimum
-a Commit Proxy computes for free is taken over transactions that actually entered the batch —
-accumulated in `commitBatcher` after its own limits, never over requests it rejected there — so
-it is a conservative proposal, not a filtered admission set:
-
-1. **Accepted.** Every transaction in the batch had `read_snapshot ≥
-   authoritativeEffectiveFloor` at that instant, so the coverage just established is valid for
-   all of them.
-2. **Rejected**, because the proposed minimum sat below the floor. **The batch is not
-   rejected.** The reply carries the authoritative floor; the proxy drops individually the
-   transactions that are genuinely too old, and then either
-   - **continues with no further trip**, if `acknowledgedProxyMinimum` already covers the
-     survivors, or
-   - **retries the install** with the recomputed minimum.
-
-The normal path therefore costs no extra message, no extra traversal and no delay — but it is
-**not** true that every lowering resolves inside the single existing round trip. One
-transaction old enough to contaminate the proposal can force a retry. That is the price of the
-rule that a conservative pre-filter must never cost the other transactions their availability.
+**A lowering install is a *proposal*, and its rejection must not fail the batch** — §4.2a gives
+the single transition that achieves both: the authority installs `max(proposedBatchMinimum,
+authoritativeEffectiveFloor)` and returns the threshold, so a proposal contaminated by one
+transaction too old still leaves the survivors covered, without a second round trip and without
+failing the batch.
 
 **Both handlers have the stretch, and both were checked.** The Commit Proxy install belongs in
 `getVersion`; the client install belongs in `serveGetLiveCommittedVersion`
@@ -933,9 +923,10 @@ propagation. The proxy:
 1. receives the commits and filters individually those already below `effectiveFloor`;
 2. computes `candidateMinimum = min(read_snapshot)` over the survivors;
 3. if `candidateMinimum ≥ acknowledgedProxyMinimum`, admits with no coordination (§4.2a);
-4. otherwise calls `conditionalInstallProxyMinimum(..., candidateMinimum, candidateMinimum)`,
-   which rejects the batch if `authoritativeEffectiveFloor` has already passed
-   `candidateMinimum`;
+4. otherwise proposes `proposedBatchMinimum`; the authority installs
+   `max(proposedBatchMinimum, authoritativeEffectiveFloor)` in one transition and returns both
+   that value and `F`, so nothing is retried and the batch is never failed wholesale;
+   afterwards the proxy rejects individually the transactions below `F`;
 5. **only after installation is acknowledged** does the batch count as admitted, and the
    client's coverage may lapse;
 6. withdraws the batch's contribution once the batch reaches a terminal state.

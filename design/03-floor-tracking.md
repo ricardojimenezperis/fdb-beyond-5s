@@ -434,22 +434,32 @@ less often than every commit. Two values must be distinguished:
 A new batch needs coordination only when it **lowers** the installed contribution:
 
 ```
-effectiveFloor = max(lastPublishedGlobalFloor, currentVersion − W_commit)
+p = proposedBatchMinimum          // min read_snapshot over the transactions in the batch
+F = authoritativeEffectiveFloor   // max(publishedGlobalValidationDemand, currentVersion − W_commit)
 
-if      (batchOldestReadSnapshot <  effectiveFloor)             pre-reject as too old
-else if (batchOldestReadSnapshot >= acknowledgedProxyMinimum)   admit with no coordination
-else                                                            install lower minimum,
-                                                                await acknowledgement, admit
+if (p >= acknowledgedProxyMinimum)   installedProxyMinimum = acknowledgedProxyMinimum
+else                                 installedProxyMinimum = max(p, F)   // one transition, no retry
+
+reply carries F and installedProxyMinimum;
+afterwards the proxy rejects individually every transaction with read_snapshot < F
 ```
 
-If `b ≥ acknowledgedProxyMinimum`, the already-installed contribution is at least as
-conservative, so **the demand-derived component of the floor cannot have passed `b`**; the
+If `p ≥ acknowledgedProxyMinimum`, the already-installed contribution is at least as
+conservative, so **the demand-derived component of the floor cannot have passed `p`**; the
 commit is admitted with no round trip at all. Since read versions cluster near `now` in normal
 operation, this is the common case.
 
+Otherwise the authority installs `max(p, F)` **in the same transition and returns `F`** — there
+is no retry. A proposal contaminated by a single transaction too old is refused as an *exact*
+minimum while the survivors still receive conservative coverage, and the proxy, having been
+told `F`, rejects the stragglers individually. **This is not the silent substitution forbidden
+on the client path** (§7a): there, accepting a reported floor under a newer value without
+saying so remains illegal, precisely because the client would believe a snapshot protected that
+is not.
+
 **That guarantee covers only the demand-derived component.** The `currentVersion − W_commit`
-term can still overtake `b` while the batch travels — with `acknowledgedProxyMinimum = 100`,
-`b = 120` and `currentVersion − W_commit = 130`, the resolver floor is 130 even though the
+term can still overtake `p` while the batch travels — with `acknowledgedProxyMinimum = 100`,
+`p = 120` and `currentVersion − W_commit = 130`, the resolver floor is 130 even though the
 proxy holds a contribution at 100. That is today's behaviour preserved: a transaction can
 become too old in transit, and the resolver keeps the final decision.
 
