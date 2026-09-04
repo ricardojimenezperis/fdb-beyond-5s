@@ -457,7 +457,10 @@ All verified against `a443d3ee60`:
 
 # Part II — Decisions
 
-Five entries, of which **one remains open**: the lease parameters (§6.5). *Open choices, not open
+Five entries, of which **one remains open**: the lease parameters (§6.5). The other four are
+settled — watermark transport (§6.1), lease placement (§6.2), the conditional-install authority
+(§6.3) and manually set read versions (§6.4) — and are recorded here because they still have to
+be *implemented* deliberately. *Open choices, not open
 safety rules — an admissible answer must still satisfy the frozen ordering and temporal
 constraints: parameters violating `clientUsageWindow + driftMargin < serverLeaseDuration`
 break safety, and so does an install that is not atomic against the floor advance or not
@@ -569,14 +572,28 @@ explicitly rather than assumed from "the master is the generation":
    irreversible publication to Storage Servers. If another component publishes, it must
    acknowledge the publication before the sequencer treats the advance as authorised.
 
+**Both handlers have the stretch, and both were checked.** The Commit Proxy install belongs in
+`getVersion`; the client install belongs in `serveGetLiveCommittedVersion`
+(`masterserver.cpp:254`), which likewise runs from receiving the request to `req.reply.send`
+with no `co_await` in between. They call the same authoritative state, and the global order
+between them comes from cooperative execution in one process — provided neither yields between
+reading the guard, installing, and authorising or publishing.
+
 **The cost objection, and how to settle it.** This adds state and per-request work to a
 singleton already on the critical path of every commit batch and every GRV batch. Measuring
 today's `getVersion` would not answer the question — it does not measure the increment. The
 way to settle it is a **dark implementation first**: keep the per-source entries and compute
-the minima without changing behaviour, and measure the critical stretch's duration,
-requests/s, the fraction of updates that lower a minimum, and per-source state size. If that
-cost turns out to be high, the structure gets optimised; it would not by itself justify a new
-round trip and a second distributed authority.
+the minima without changing behaviour.
+
+*What that step can measure*: the per-source lookup and update cost, the maintenance of the two
+reductions, the duration added to the critical stretch, the size of the state, and the
+serialization of the new fields. *What it cannot*: the fraction of updates that lower a
+minimum, or the cost under real distributions — before leases and the pending-batch deque exist
+there are no real minima to observe, so those belong to F0b, with the producers. The dark step
+therefore prices the authority's **structural floor cost and validates its placement**; it does
+not price the mechanism in production. If that structural cost turns out to be high, the
+structure gets optimised; it would not by itself justify a new round trip and a second
+distributed authority.
 
 *Rejected: the Cluster Controller. It survives generations and already aggregates, but it sits
 on no per-batch path, so every lowering install would need a new round trip and the
@@ -1045,20 +1062,26 @@ whose read version fell below the authoritative effective floor cannot complete 
 ## 12. Aggregation hierarchy
 
 ```
-client library → GRV proxy (min over valid leases) → Cluster Controller
-              → globalOldestClientRV → broadcast → derived floors (§4)
+client library → GRV proxy (min over valid leases) → the generation's sequencer
+              → globalOldestClientRV → consumer-scoped publication → derived floors (§4)
 ```
+
+The sequencer holds the per-source entries, computes the minima and publishes the floors
+(§6.3). **The Cluster Controller is not the ordinary aggregator**; it takes part only in the
+handover and fencing between generations.
 
 The property is *not* that no component tracks transactions — once §10 exists, commit
 proxies track a minimum over their pending batches. The real property is that **the hierarchy
-transports minima, not a cluster-wide transaction list**: clients track their own active
-read versions, proxies reuse the batch detail they already hold, the CC aggregates
-per-source minima. No
-component holds a global registry of transactions.
+transports minima, not a cluster-wide transaction list**: clients track their own active read
+versions, proxies reuse the batch detail they already hold, and the sequencer aggregates
+per-source minima. No component holds a global registry of transactions.
 
-**Proxy-generation barrier:** a single proxy replacement must not invalidate long readers.
-Minimal implementation — the CC holds the last known watermark for one full lease period
-while clients re-register.
+**Proxy-generation barrier:** a single proxy replacement must not invalidate long readers. **A
+lease period can only justify releasing a GRV-proxy contribution, never a Commit Proxy's**,
+which is released at the generation fence rather than on a timer. Across a generation change
+the Cluster Controller either hands the previous generation's conservative per-source state to
+the new sequencer or withholds that sequencer's authority to advance until the old generation
+is fenced; publishing a *later* floor before the fence completes is not permitted either way.
 
 ## 13. Set expectations: Phase A ships as a retention no-op
 
@@ -1320,9 +1343,12 @@ behaviour-neutral, which is what lets a reviewer accept one without accepting th
 4. **F1** — the request-carried derived floor, encoded as an `Optional` field with no
    protocol-version bump, with legacy fallback and equality asserts (§8). No aggregator and no
    broadcast.
-5. **The sequencer's dark floor state** — per-source entries and their minima maintained
-   inside `getVersion`'s non-suspending stretch, computed and measured but not acted on
-   (§6.3). Behaviour-neutral, and it prices the authority before F2 depends on it.
+5. **The sequencer's dark floor state** — per-source entries and their minima maintained inside
+   the non-suspending stretches of `getVersion` *and* `serveGetLiveCommittedVersion`, computed
+   and measured but **not acted on**: no consumed floor changes, no admission changes, and no
+   observable reply changes beyond neutral diagnostic fields (§6.3). It prices the authority's
+   structural floor cost and validates its placement; the coordination rate and behaviour under
+   real distributions wait for F0b, when the producers exist.
 6. **F2** — incarnation IDs, leases, renewal, expiry, administrative limits, and the
    aggregation of `globalOldestClientRV` (§9), including **`conditionalInstallClientMinimum`**
    — guarded by `authoritativeStorageAdmissionFloor`, never by the resolver's floor — and the

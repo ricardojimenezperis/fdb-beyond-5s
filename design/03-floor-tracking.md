@@ -6,7 +6,8 @@ parameters. Watermark transport, lease placement and the conditional-install aut
 decided for v1. Three ordering
 requirements are closed as **rules**: the initial registration (§3), the lease's temporal
 contract (§2), and the commit lifecycle handoff (§4a) — the last of which was what blocked
-Resolver Phase A (`01-resolver.md` §3), with its linearization mechanism left to §8.4. Claims
+Resolver Phase A (`01-resolver.md` §3); its linearization mechanism is decided in §8.4 — the
+generation's sequencer. Claims
 about current FDB carry `file:line`.*
 
 ## 1. Why this protocol must exist
@@ -702,15 +703,18 @@ selected and covered by these cases before Resolver Phase A ships.**
 
 ## 5. Aggregation hierarchy
 
-A hierarchical `min` reduction: client library → GRV proxy (over valid leases) → Cluster
-Controller → `globalOldestClientRV` → consumer-scoped publication → derived floors (§6).
+A hierarchical `min` reduction: client library → GRV proxy (over valid leases) → **the
+generation's sequencer** → `globalOldestClientRV` → consumer-scoped publication → derived
+floors (§6). The sequencer holds the per-source entries, computes the minima and publishes the
+floors (§8.4); the Cluster Controller is not the ordinary aggregator, and takes part only in
+the handover and fencing between generations.
 
 The property is **not** that no component tracks transactions individually — once §4a exists,
 Commit Proxies track a minimum over their pending batches. It is that *the hierarchy
 transports minima rather than a
 cluster-wide transaction list*: clients track their own active read versions to compute their
 minimum, Commit Proxies reuse the batch detail they already hold, and the Cluster
-Controller aggregates per-source minima. No component holds a global registry of transactions.
+sequencer aggregates per-source minima. No component holds a global registry of transactions.
 
 Empty reductions are defined **independently per source**: `min(∅) = currentVersion`. Two
 readings are wrong in opposite directions — that the derived floors "fall back to their policy
@@ -826,8 +830,13 @@ Two consequences worth stating explicitly, because Phase A's schedule depends on
   twenty times the ordinary window — so after recovery every pre-recovery read version is
   already too old. "Recovery may invalidate retained history" is today's behaviour, not a new
   concession. For **proxy-generation** changes a barrier remains mandatory: a single proxy
-  replacement must not invalidate long readers. Minimal implementation: the CC holds the last
-  known watermark for one full lease period while clients re-register.
+  replacement must not invalidate long readers. **A lease period can only justify releasing a
+  GRV-proxy contribution, never a Commit Proxy's**, which is released at the generation fence
+  and not on a timer (§4a). Across a generation change the Cluster Controller does not become
+  the aggregator: it either hands the previous generation's conservative per-source state to
+  the new sequencer, or withholds that sequencer's authority to advance until the old
+  generation is fenced. Which of the two is an implementation detail of the fence; publishing a
+  *later* floor before it completes is not permitted either way.
 - **Backward compatible with no flag day** — a legacy client never reports and therefore never
   holds the floor down; the mixed-mode formula of §6 makes this literal.
 
@@ -898,7 +907,7 @@ inherits the same contract:
 One remains open — the lease parameters (1). Entries 2, 3 and 4 are **decided for v1** and kept
 here with the reasoning that settled them.
 
-**Two implementation choices remain open, but no safety rule does.** Every admissible choice
+**One implementation choice remains open, and no safety rule does.** Every admissible choice
 must satisfy the frozen ordering and temporal constraints: lease parameters that violate
 `clientUsageWindow + driftMargin < serverLeaseDuration` break safety, and a conditional-install
 placement that does not guarantee atomicity against the floor advance, or generation fencing,
@@ -984,6 +993,13 @@ many thousands of client processes that is new memory and new periodic work on a
 critical role; under the multi-copy resolution of §5 it multiplies by the proxy count. Size it
 before choosing lease duration (§8.1) — the two decisions are coupled.
 
+**The sequencer acquires the authority's state (§8.4):** one entry per source — per GRV Proxy
+and per Commit Proxy — plus the two reductions, maintained inside the non-suspending stretches
+it already runs. The load lands on a singleton already on the critical path of every commit and
+every GRV batch, which is the price of inheriting its order; what it does *not* add is a round
+trip, since both installs ride messages those proxies already send and the existing replies
+serve as the acknowledgement.
+
 **Commit Proxies acquire far less (§4a):** a monotonic deque of `{localBatchNumber, minimum
 read_snapshot}`, bounded by the pending batches and usually far smaller, since every entry
 dominated by a later one is discarded on arrival. The transactions themselves are already in
@@ -1016,8 +1032,9 @@ This cost may exceed the lease map's and deserves its own benchmark.
 ## In one sentence
 
 > Each client library maintains a monotonic minimum active read version, piggybacked on GRV
-> requests and kept alive by a lease only while snapshots live; GRV proxies and the Cluster
-> Controller reduce it by `min` into a single global watermark; **demand-side** retention
+> requests and kept alive by a lease only while snapshots live; GRV proxies reduce those to a
+> per-proxy minimum and the generation's sequencer reduces the sources into a single global
+> watermark, publishing it; **demand-side** retention
 > responsibility is handed to the Commit Proxies' minimum over their pending batches before the
 > client's coverage is released, and that contribution is held until validation completes or
 > the generation is fenced from influencing a durable decision — while the ordinary
