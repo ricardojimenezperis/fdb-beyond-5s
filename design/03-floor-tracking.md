@@ -88,7 +88,8 @@ same guarantee could be obtained by a non-temporal fencing mechanism instead.
 
 **Decision for v1: the temporal *rule* above is frozen, not left open.** Its parameters are
 not — the exact inequality between server lease duration, client window and maximum clock
-drift belongs to §8.1, and is unset until F0 sizes it. The rule is the standard lease
+drift belongs to §8.1, and is unset until the lease instrumentation sizes it — which ships
+with the leases themselves, not before them. The rule is the standard lease
 argument, and its failure direction is availability rather
 than safety; leaving it open would block Phase A on a decision that already has a working
 default. A non-temporal replacement remains a possible later change — it is not one of the
@@ -869,7 +870,9 @@ inherits the same contract:
    renewInterval                   < clientUsageWindow
    ```
 
-   with local revocation when no acknowledgement arrives in time. F0 sizes them.
+   with local revocation when no acknowledgement arrives in time. The measurements that size
+   them (lease lifetimes, renewal and expiry rates, reported-floor lag) presuppose the
+   registrations exist, so they ship with the lease implementation rather than preceding it.
 2. **Watermark distribution transport** — `ServerDBInfo` field vs a light dedicated broadcast.
    **The concern is corroborated:** `ServerDBInfo.id` "Changes each time any other member
    changes" (`fdbserver/core/include/fdbserver/core/ServerDBInfo.h:40`), so a
