@@ -1,9 +1,9 @@
 # Floor Tracking — the Oldest Active Read Version
 
 *Status: design frozen at the protocol level, reviewed against `apple/foundationdb` main @
-`a443d3ee60`. **Two** implementation choices remain deliberately open (§8): the lease
-parameters and the placement and transport of the conditional-install authority. Watermark
-transport and lease placement are decided for v1. Three ordering
+`a443d3ee60`. **One** implementation choice remains deliberately open (§8): the lease
+parameters. Watermark transport, lease placement and the conditional-install authority are
+decided for v1. Three ordering
 requirements are closed as **rules**: the initial registration (§3), the lease's temporal
 contract (§2), and the commit lifecycle handoff (§4a) — the last of which was what blocked
 Resolver Phase A (`01-resolver.md` §3), with its linearization mechanism left to §8.4. Claims
@@ -895,8 +895,8 @@ inherits the same contract:
 
 ## 8. Implementation choices
 
-Two remain open — the lease parameters (1) and where the conditional-install authority runs
-(4). Entries 2 and 3 are **decided for v1** and kept here with the reasoning that settled them.
+One remains open — the lease parameters (1). Entries 2, 3 and 4 are **decided for v1** and kept
+here with the reasoning that settled them.
 
 **Two implementation choices remain open, but no safety rule does.** Every admissible choice
 must satisfy the frozen ordering and temporal constraints: lease parameters that violate
@@ -929,33 +929,49 @@ whether the rules hold.
    deduplication.* Not a free choice: it decides
    whether the hot GRV path changes, and under multi-copy it decides how stale copies are
    refreshed or expired.
-4. **Where the conditional-install authority executes, and how *both* operations are
-   transported** — *open.* Each must run at the authority that publishes the relevant floor, so that the
-   comparison and the installation are one atomic step:
+4. **Where the conditional-install authority executes** — *decided for v1: the generation's
+   sequencer (master).* It is the authority for both conditional installs and for the published
+   floors, holding state per **source** — one entry per GRV Proxy and per Commit Proxy — never
+   per client and never per transaction. Each operation is linearised in a non-suspending
+   stretch together with any advance that could make the candidate inadmissible, and recovery
+   initialises the new authority only after the previous generation is fenced.
 
    - `conditionalInstallClientMinimum`, ordered against `authoritativeStorageAdmissionFloor`;
-   - `conditionalInstallProxyMinimum`, ordered against `authoritativeResolverEffectiveFloor`
-     — `max(globalValidationDemand, authoritativeCurrentVersion − W_commit)`, not the demand
-     minimum alone.
+   - `conditionalInstallProxyMinimum`, ordered against `authoritativeResolverEffectiveFloor`.
 
-   **They may share transport and machinery, never guards** (§3, §4a). Candidates for either: a
-   generation-fenced operation in the floor protocol, or the source awaiting confirmation
-   before proceeding — the GRV proxy before replying, the Commit Proxy before admitting the
-   batch. It may reuse the machinery selected for consumer-scoped publication (2), provided
-   the comparison and the installation stay atomically ordered at the authority.
+   **They may share transport and machinery, never guards** (§3, §4a).
 
-   **Neither is entangled with lease identity.** Because admission is decided against a floor
-   rather than against a specific registration (§4a), the handoff does not need to locate a
-   custodian GRV proxy, and multi-copy leases (§5) cost nothing extra here — removing what used
-   to be the strongest argument for the stable-proxy option.
+   **The ordering is inherited, not built.** `getVersion` (`masterserver.cpp:74`) is the sole
+   writer of the cluster's version, and from its ordering wait (`:91`) through the reply and
+   the sequence advance there is no suspension point; the compare, the install and the
+   publication belong inside that stretch. The per-proxy `latestRequestNum` only orders one
+   proxy's requests against each other — it is being the sole writer, plus the absence of a
+   `co_await`, that gives the global order.
 
-   **Acceptance criterion for any candidate — both sides.** It must define ownership and
-   cleanup across process failure on each path, not only client failure: the **GRV proxy**
-   generation barrier for the client install, so the admission floor cannot advance before
-   coverage is rebuilt or every usage window it could authorise has conservatively expired
-   (§2, §7); and the **Commit Proxy** generation barrier for the proxy install,
-   so a replacement or the Cluster Controller preserves the previous generation's minimum until
-   that generation's accepted requests are inherited or fenced closed (§4a).
+   **The transport is inherited too.** Both installers already reach the sequencer once per
+   batch on existing messages — `GetCommitVersionRequest` from the Commit Proxy, and
+   `getLiveCommittedVersion` from the GRV Proxy after it groups requests
+   (`masterserver.cpp:254`, `GrvProxyServer.cpp:727`) — and those replies already serve as the
+   acknowledgement. A lowering install therefore adds fields to a round trip that must happen
+   anyway before resolution, not a round trip of its own.
+
+   **Fencing is not free, and four cases must be closed explicitly**, rather than inferred from
+   "the master is the generation": at a generation change the new sequencer may neither forget
+   an authorised floor nor publish a later one until the old generation is fenced; a dead GRV
+   Proxy's contribution stays until every usage window it could have granted has expired,
+   since process disappearance is not evidence; a dead Commit Proxy's contribution does not
+   expire on a timer but at the generation fence; and `authoritativeStorageAdmissionFloor` must
+   share an order domain with the irreversible publication to Storage Servers, so a separate
+   publisher must acknowledge before the sequencer treats an advance as authorised.
+
+   **Acceptance criterion — both sides.** Ownership and cleanup must be defined across process
+   failure on each path: the GRV-proxy generation barrier for the client install, so the
+   admission floor cannot advance before coverage is rebuilt or those windows expire (§2, §7);
+   and the Commit-Proxy barrier for the commit install (§4a).
+
+   *Rejected: the Cluster Controller — it survives generations and already aggregates, but sits
+   on no per-batch path, so every lowering install would need a new round trip and the
+   linearisation would have to be constructed rather than inherited.*
 
 Open here means *how*, not *whether*: the §4a handoff rule itself is a correctness requirement,
 not an implementation preference.

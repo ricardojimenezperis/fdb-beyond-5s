@@ -457,8 +457,7 @@ All verified against `a443d3ee60`:
 
 # Part II — Decisions
 
-Five entries, of which **two remain open**: the lease parameters (§6.5) and the exact
-placement and transport of the conditional-install authority (§6.3). *Open choices, not open
+Five entries, of which **one remains open**: the lease parameters (§6.5). *Open choices, not open
 safety rules — an admissible answer must still satisfy the frozen ordering and temporal
 constraints: parameters violating `clientUsageWindow + driftMargin < serverLeaseDuration`
 break safety, and so does an install that is not atomic against the floor advance or not
@@ -531,40 +530,57 @@ model it adds no handoff-identity cost** (§6.3), so what remains is lease-state
 — up to one entry per client per proxy — and a floor that advances no faster than the least
 recently refreshed copy.
 
-## 6.3 Where the conditional install runs
+## 6.3 Where the conditional install runs — decided for v1
 
-**There is no handoff-identity problem.** Admission is decided against the *authoritative
-effective floor* inside the conditional install — never against a broadcast value, which may be
-stale — and not against a specific client registration (§4.2a), so the commit request needs no
-`clientID`, no `leaseGeneration`, no `registrationID` and no lease capability. Identity is
-still required — but only on the GRV path, to protect lease entries against collision,
-impersonation and stale incarnations (§11).
+**The generation's sequencer (master) is the authority for both conditional installs and for
+the published floors.** It keeps state per *source* — one entry per GRV Proxy and per Commit
+Proxy — never per client and never per transaction. Each operation is linearised in a
+non-suspending stretch together with any advance that could make the candidate inadmissible.
+Recovery initialises the new authority only after the previous generation is fenced.
 
-That also removes what used to be the strongest argument for pinning GRV requests to a stable
-proxy: under multi-copy leases nobody has to work out which proxy holds the authoritative
-copy, because nothing in the handoff consults it (§6.2).
+**Why the sequencer, in facts rather than preference.**
 
-What remains open is **where the conditional-install authority executes and how *both*
-operations are transported**. Each must run at the authority that publishes the relevant floor,
-so that the comparison and the installation are a single atomic step — **for both installs, each against its own
-guard**: `conditionalInstallClientMinimum` against `authoritativeStorageAdmissionFloor`, and
-`conditionalInstallProxyMinimum` against `authoritativeResolverEffectiveFloor` (including
-`authoritativeCurrentVersion − W_commit`, not the demand minimum alone). They may share
-transport and machinery, never guards. The acceptance criterion covers both generation
-barriers: GRV proxy failure for the first, Commit Proxy failure for the second. Candidates: a
-generation-fenced operation in the floor protocol, or the proxy participating as a source and
-awaiting confirmation before admitting the batch. It may reuse the machinery chosen for
-consumer-scoped publication (§6.1, now decided), provided the comparison and the installation
-stay atomically ordered at the authority.
+* **The ordering already exists there.** `getVersion` (`masterserver.cpp:74`) is the only
+  writer of `self->version`, and from the ordering wait
+  (`latestRequestNum.whenAtLeast(req.requestNum - 1)`, `:91`) through `req.reply.send(rep)` and
+  `latestRequestNum.set(...)` there is **no `co_await`**. The compare, the installation and the
+  publication must go inside that same stretch. *Note what does the work here: `latestRequestNum`
+  only orders the requests of one proxy against each other. Global linearisation comes from
+  being the sole writer plus the absence of any suspension, not from that sequence number.*
+* **Both installers already talk to it once per batch**, on messages that exist today: the
+  Commit Proxy through `GetCommitVersionRequest`/`Reply`, and the GRV Proxy through
+  `getLiveCommittedVersion` (`masterserver.cpp:254`, `GrvProxyServer.cpp:727`), which it calls
+  after grouping requests. A lowering install can therefore ride a round trip the proxy must
+  make anyway *before* resolution, and the existing reply is already the acknowledgement — the
+  slow path of §4.2a costs fields, not a round trip.
+* **It holds `currentVersion` authoritatively**, which
+  `authoritativeCurrentVersion − W_commit` needs.
 
-**The ordering obligation is not a choice** (the mechanism is). One authority must order:
-removal and update of source contributions; installation of Commit Proxy minima; and the
-irreversible advance of `publishedFloor`.
+**What fencing does *not* give for free.** The topology fits, but four cases must be closed
+explicitly rather than assumed from "the master is the generation":
 
-**Acceptance criterion for any candidate — both sides.** It must define ownership and cleanup
-across process failure on each path, not only client failure: the **GRV proxy** generation
-barrier for the client install, and the **Commit Proxy** generation barrier for the commit
-install.
+1. **Generation change** — the new sequencer may neither forget a floor already authorised nor
+   publish a later one until the previous generation is fenced against durable decisions.
+2. **GRV Proxy death** — its last contribution stays in the sequencer until every usage window
+   that proxy could have granted has expired. Process disappearance is not enough (§10).
+3. **Commit Proxy death** — its contribution does *not* expire on a timer; it stays until the
+   generation fence.
+4. **Storage** — `authoritativeStorageAdmissionFloor` must live in the same order domain as the
+   irreversible publication to Storage Servers. If another component publishes, it must
+   acknowledge the publication before the sequencer treats the advance as authorised.
+
+**The cost objection, and how to settle it.** This adds state and per-request work to a
+singleton already on the critical path of every commit batch and every GRV batch. Measuring
+today's `getVersion` would not answer the question — it does not measure the increment. The
+way to settle it is a **dark implementation first**: keep the per-source entries and compute
+the minima without changing behaviour, and measure the critical stretch's duration,
+requests/s, the fraction of updates that lower a minimum, and per-source state size. If that
+cost turns out to be high, the structure gets optimised; it would not by itself justify a new
+round trip and a second distributed authority.
+
+*Rejected: the Cluster Controller. It survives generations and already aggregates, but it sits
+on no per-batch path, so every lowering install would need a new round trip and the
+linearisation would have to be built rather than inherited.*
 
 ## 6.4 Manually set read versions — already decided, implement it explicitly
 
@@ -1304,31 +1320,34 @@ behaviour-neutral, which is what lets a reviewer accept one without accepting th
 4. **F1** — the request-carried derived floor, encoded as an `Optional` field with no
    protocol-version bump, with legacy fallback and equality asserts (§8). No aggregator and no
    broadcast.
-5. **F2** — incarnation IDs, leases, renewal, expiry, administrative limits, and the
+5. **The sequencer's dark floor state** — per-source entries and their minima maintained
+   inside `getVersion`'s non-suspending stretch, computed and measured but not acted on
+   (§6.3). Behaviour-neutral, and it prices the authority before F2 depends on it.
+6. **F2** — incarnation IDs, leases, renewal, expiry, administrative limits, and the
    aggregation of `globalOldestClientRV` (§9), including **`conditionalInstallClientMinimum`**
    — guarded by `authoritativeStorageAdmissionFloor`, never by the resolver's floor — and the
    lease's temporal contract; register-before-use is not closed without both.
-6. **The Commit Proxy minimum** — `batchOldestReadSnapshot` over admitted commits, held in a
+7. **The Commit Proxy minimum** — `batchOldestReadSnapshot` over admitted commits, held in a
    monotonic deque and retired at the serialised logging transition (§4.2), plus the
    conservative pre-filter (§4.2b).
-7. **The linearization** between commit admission, incorporation of the proxy's contribution,
+8. **The linearization** between commit admission, incorporation of the proxy's contribution,
    and floor advance (§10) — the conditional install, the acknowledgement tagging, and the
    fast path that skips it entirely when `b ≥ acknowledgedProxyMinimum` (§4.2a).
-8. **Generation barriers** for GRV-proxy and Commit-Proxy death (§10, §12).
-9. **Mixed-version negotiation, kill switch, staleness fallback** (§13, §15).
-10. **Simulation tests**: lifecycle, failures, recovery, adversarial input, compatibility (§16).
-11. **Apply the floor coordinately in the resolver and in `keyResolvers`** (§14).
-12. **Replace or repair the sweep**; if the current one is kept for now, add the full-lap
+9. **Generation barriers** for GRV-proxy and Commit-Proxy death (§10, §12).
+10. **Mixed-version negotiation, kill switch, staleness fallback** (§13, §15).
+11. **Simulation tests**: lifecycle, failures, recovery, adversarial input, compatibility (§16).
+12. **Apply the floor coordinately in the resolver and in `keyResolvers`** (§14).
+13. **Replace or repair the sweep**; if the current one is kept for now, add the full-lap
     metric per floor generation (§14, `01-resolver.md` §A.3).
-13. **The canonical epoch SkipLists**, on a floor that is by then correct.
-14. **Measure T3.1**: search cost, memory, and the frequency *and* unit cost of every
+14. **The canonical epoch SkipLists**, on a floor that is by then correct.
+15. **Measure T3.1**: search cost, memory, and the frequency *and* unit cost of every
     transition and arena discard.
 
 The **sweep repair** (`01-resolver.md` §A.3) depends on none of this and can run
 in parallel from day one — it is needed *because* a demand-driven floor plateaus. It does
 change behaviour, so it carries its own measurement with the T3.3 harness.
 
-Steps 1–4 are safe in any cluster. Beyond them, what matters is not which step you are on but
+Steps 1–5 are safe in any cluster — the sequencer's floor state is dark until F2 reads it. Beyond them, what matters is not which step you are on but
 **what is allowed to be switched on**:
 
 > All F2/F3 machinery stays dark behind the feature gate. Demand-driven floors **and the Commit
