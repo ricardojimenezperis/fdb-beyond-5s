@@ -247,39 +247,49 @@ drafts:
 - `installedProxyMinimum` — what the authority actually installed: `p` exactly when `p ≥ F`,
   and `F` conservatively when `p < F`.
 
-**The whole exchange is one transition inside the sequencer's non-suspending stretch, and there
-is no retry**:
+**Four quantities, and the install never raises.** A fourth is needed beside the three above:
+
+- `authoritativeInstalledProxyMinimum` (`C`) — what this source currently has installed,
+  **read from the authority's own state**. `acknowledgedProxyMinimum` is the proxy's local copy
+  of it, useful to skip the exchange, never the authority on its value.
 
 ```cpp
-// at the Commit Proxy, before sending
-if (p >= acknowledgedProxyMinimum) {
-    installedMinimum = acknowledgedProxyMinimum;   // existing contribution already covers p
-} else {
-    // inside the sequencer's atomic stretch
-    installedMinimum = std::max(p, F);
-    installProxyMinimum(installedMinimum);
-}
+// inside the sequencer's atomic stretch
+C = authoritativeInstalledProxyMinimum(source);   // empty-source value if absent
+I = min(C, max(p, F));
+if (I < C) installProxyMinimum(source, I);        // never raises here
+
 reply.authoritativeEffectiveFloor = F;
-reply.acknowledgedProxyMinimum    = installedMinimum;
+reply.installedProxyMinimum       = I;
 ```
 
 and **after the reply** the proxy rejects individually every transaction with
 `read_snapshot < F`.
 
-**Why that covers every case.**
+**Why `min(C, …)` is load-bearing.** Without it, `C = 100` still covering an earlier pending
+batch, a contaminated `p = 50` and an advanced `F = 150` would install 150 — raising the
+contribution and dropping the earlier batch's coverage while it is still in flight. Raises
+belong to retirement (§4.2), never to an install.
 
-| Case | Installed | Coverage |
-|---|---|---|
-| `p ≥ acknowledgedProxyMinimum` | nothing new | `acknowledged ≤ p ≤ read_snapshot` for all of them |
-| `p ≥ F` | `p` | exact; covers the whole batch |
-| `p < F` | `F` | every survivor has `read_snapshot ≥ F` |
-| `p < F`, no survivors | `F` | over-retains only until that batch retires |
+**The four cases, mutually exclusive:**
 
-So a contaminated proposal is rejected **as an exact minimum** while the same transition still
-installs conservative coverage for whatever survives, and the reply states the rejection
-threshold explicitly. **This is not the silent substitution forbidden on the GRV path** (§11):
-the Commit Proxy is told `F` and rejects each commit that fell outside it. On the *client*
-path, raising a reported floor silently remains illegal.
+| Condition | Installed `I` |
+|---|---|
+| `p ≥ C` | `C`, no update |
+| `p < C` and `p ≥ F` | `p` |
+| `p < F < C` | `F` |
+| `p < C ≤ F` | `C`, no update |
+
+Every survivor satisfies `read_snapshot ≥ F` by the filter and `read_snapshot ≥ p` because `p`
+is the batch minimum, hence `I ≤ max(p, F) ≤ read_snapshot`. Every earlier batch stays covered
+because `I ≤ C`. With no survivors at all, the contribution merely over-retains until that
+batch retires.
+
+So a contaminated proposal is refused **as an exact minimum** while the same transition keeps
+coverage for whatever survives, and the reply states the rejection threshold explicitly.
+**This is not the silent substitution forbidden on the GRV path** (§11): the Commit Proxy is
+told `F` and rejects each commit that fell outside it. On the *client* path, raising a reported
+floor silently remains illegal.
 
 **The guarantee covers only the demand-derived component.** `currentVersion − W_commit` can
 still overtake `p` in transit: with `acknowledgedProxyMinimum = 100`, `p = 120` and
@@ -918,18 +928,21 @@ would be a spurious availability loss. The two exclusive outcomes are
 
 The *contribution* must be **ordered** with respect to floor advance; updating a local
 minimum and propagating eventually is not enough, because the floor could advance during
-propagation. The proxy:
+propagation. Note the order the sequence actually permits: **the proxy cannot filter first**,
+because `F` is known only at the authority and arrives in the reply. So:
 
-1. receives the commits and filters individually those already below `effectiveFloor`;
-2. computes `candidateMinimum = min(read_snapshot)` over the survivors;
-3. if `candidateMinimum ≥ acknowledgedProxyMinimum`, admits with no coordination (§4.2a);
-4. otherwise proposes `proposedBatchMinimum`; the authority installs
-   `max(proposedBatchMinimum, authoritativeEffectiveFloor)` in one transition and returns both
-   that value and `F`, so nothing is retried and the batch is never failed wholesale;
-   afterwards the proxy rejects individually the transactions below `F`;
-5. **only after installation is acknowledged** does the batch count as admitted, and the
-   client's coverage may lapse;
-6. withdraws the batch's contribution once the batch reaches a terminal state.
+1. **accumulates `p`** as transactions enter the batch (`commitBatcher`), over those admitted
+   into it rather than over requests it rejected there;
+2. **skips the exchange** if `p ≥ acknowledgedProxyMinimum` — its local copy says the installed
+   contribution already covers the batch (§4.2a);
+3. otherwise **sends `p` as a proposal** on the request it already makes;
+4. the authority, in one non-suspending transition, computes `F`, reads `C` from its own state,
+   installs `I = min(C, max(p, F))` when `I < C`, and **replies with `F` and `I`**;
+5. on the reply the proxy **rejects individually** every transaction with `read_snapshot < F`,
+   and admits the survivors, which `I` already covers; the batch is never failed wholesale, and
+   nothing is retried;
+6. **withdraws** the batch's contribution once the batch reaches a terminal state — the only
+   place a contribution rises.
 
 The commit proxy is the natural custodian: it already holds per-batch state and already
 computes a resolver-visible horizon (`CommitProxyServer.cpp:2104`, and the proxy set at
@@ -1183,7 +1196,9 @@ Handoff boundary (§10):
 * dies after dispatching to only some of them;
 * all resolvers reply, but the proxy dies before withdrawing or publishing the withdrawal;
 * the global floor advances between the proxy's admissibility test and the arrival of its
-  installation — the conditional install must fail and the batch be rejected, never admitted;
+  installation — the authority must install `min(C, max(p, F))` and report `F`, so the batch is
+  never admitted wholesale under a floor that passed it, never failed wholesale either, and
+  never has its earlier coverage raised away;
 * a late acknowledgement of a raised contribution arrives after a lower one was installed —
   discarded, never overwriting `acknowledgedProxyMinimum`;
 * a batch retires whose entry already left the deque through `pop_back` — the minimum must

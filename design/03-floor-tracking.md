@@ -437,8 +437,10 @@ A new batch needs coordination only when it **lowers** the installed contributio
 p = proposedBatchMinimum          // min read_snapshot over the transactions in the batch
 F = authoritativeEffectiveFloor   // max(publishedGlobalValidationDemand, currentVersion − W_commit)
 
-if (p >= acknowledgedProxyMinimum)   installedProxyMinimum = acknowledgedProxyMinimum
-else                                 installedProxyMinimum = max(p, F)   // one transition, no retry
+C = authoritativeInstalledProxyMinimum(source)   // read at the authority, not sent by the proxy
+
+if (p >= acknowledgedProxyMinimum)   skip the exchange; the installed contribution covers p
+else                                 installedProxyMinimum = min(C, max(p, F))   // never raises
 
 reply carries F and installedProxyMinimum;
 afterwards the proxy rejects individually every transaction with read_snapshot < F
@@ -449,8 +451,8 @@ conservative, so **the demand-derived component of the floor cannot have passed 
 commit is admitted with no round trip at all. Since read versions cluster near `now` in normal
 operation, this is the common case.
 
-Otherwise the authority installs `max(p, F)` **in the same transition and returns `F`** — there
-is no retry. A proposal contaminated by a single transaction too old is refused as an *exact*
+Otherwise the authority installs `min(C, max(p, F))` **in the same transition and returns both
+`F` and what it installed** — there is no retry, and no install ever raises a contribution. A proposal contaminated by a single transaction too old is refused as an *exact*
 minimum while the survivors still receive conservative coverage, and the proxy, having been
 told `F`, rejects the stragglers individually. **This is not the silent substitution forbidden
 on the client path** (§7a): there, accepting a reported floor under a newer value without
@@ -593,17 +595,23 @@ installation while authoritativeEffectiveFloor ≤ r      → accept
 contribution conditionally on the authoritative effective floor:
 
 ```
-InstallResult conditionalInstallProxyMinimum(
+InstallReply conditionalInstallProxyMinimum(
         ProxyID proxy, Generation generation, PublicationSequence sequence,
-        Version candidateMinimum, Version requiredReadVersion) {
-    // executed by the same authority that publishes the floor
-    const Version authoritativeEffectiveFloor =
-        max(publishedGlobalValidationDemand, authoritativeCurrentVersion − W_commit);
-    if (authoritativeEffectiveFloor > requiredReadVersion) return TooOld;
-    installOrLowerSourceMinimum(proxy, generation, sequence, candidateMinimum);
-    return Installed;
+        Version proposedBatchMinimum) {
+    // executed by the same authority that publishes the floor, in one non-suspending stretch
+    const Version F = max(publishedGlobalValidationDemand,
+                          authoritativeCurrentVersion − W_commit);
+    const Version C = authoritativeInstalledProxyMinimum(proxy);  // empty-source value if absent
+    const Version I = min(C, max(proposedBatchMinimum, F));
+    if (I < C) {
+        installSourceMinimum(proxy, generation, sequence, I);      // an install never raises
+    }
+    return { F, I };
 }
 ```
+
+`C` is read from the authority's own state. The proxy's `acknowledgedProxyMinimum` is a local
+copy, good for skipping the exchange entirely, never authoritative about what is installed.
 
 **The comparison is against the effective floor, not against the demand minimum alone.** The
 resolver's floor is `max(demand, currentVersion − W_commit)`, so testing only the demand
@@ -612,10 +620,15 @@ the resolver merely to be rejected. Winning the install means the batch was admi
 that instant*; the time term may still overtake it afterwards, on the way to the resolver,
 exactly as today.
 
-For a batch, after individually filtering commits that are already too old,
-`candidateMinimum = min(read_snapshot of the survivors)` and `requiredReadVersion =
-candidateMinimum`; every admitted commit then satisfies `read_snapshot ≥ candidateMinimum ≥
-authoritativeEffectiveFloor`.
+**The proxy cannot filter first**: `F` is known only at the authority and arrives in the reply.
+It therefore proposes `p`, the minimum over the transactions that entered the batch, and
+filters *afterwards*, rejecting individually every commit with `read_snapshot < F`. Every
+survivor satisfies `read_snapshot ≥ F` by that filter and `read_snapshot ≥ p` because `p` is the
+batch minimum, so `I ≤ max(p, F) ≤ read_snapshot` covers all of them; and every earlier batch
+stays covered because `I ≤ C`. **The `min(C, …)` is load-bearing**: with `C = 100` still
+covering an in-flight batch, a contaminated `p = 50` and an advanced `F = 150`, installing
+`max(p, F)` would raise the contribution to 150 and strand the earlier batch. Raises belong to
+retirement, never to an install.
 
 `clientID` and `leaseGeneration` therefore do **not** need to travel on the commit request.
 They remain necessary to authenticate and protect lease updates on the GRV path (§7a), but
@@ -702,7 +715,9 @@ authorized party consumes it to decide.)
 - all Resolvers reply, but the proxy dies before withdrawing or publishing the withdrawal;
 - a successor generation appears while replies from the previous one are still arriving;
 - the global floor advances between the proxy's admissibility test and the arrival of its
-  installation — the conditional install must fail and the batch be rejected, never admitted;
+  installation — the authority must install `min(C, max(p, F))` and report `F`, so the batch is
+  never admitted wholesale under a floor that passed it, never failed wholesale either, and
+  never has its earlier coverage raised away;
 - a late acknowledgement of a *raised* contribution arrives after a lower one was installed —
   it must be discarded, not allowed to overwrite `acknowledgedProxyMinimum`;
 - a batch retires while its entry is no longer in the deque (it left through `pop_back`), and
