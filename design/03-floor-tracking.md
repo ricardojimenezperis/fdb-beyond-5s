@@ -495,9 +495,19 @@ stale ones are discarded**, so that a late acknowledgement of a *raise* cannot o
 lower minimum installed since. And a *raise* is guarded at the authority by a per-source
 revision that every admission advances — including admissions where nothing was written, since
 those are precisely the ones that create newly covered work. A raise carries the revision it
-was computed against and applies only if that revision is still current; refused, it is
-recomputed from the deque and resent. A late lowering merely over-retains; a late raise would
-strip coverage from work admitted since, which is why only raises need the compare.
+was computed against and applies only if that revision is still current. A late lowering merely
+over-retains; a late raise would strip coverage from work admitted since, which is why only
+raises need the compare.
+
+The compare closes the remote half. The local half is that **a revision may not be used before
+its batch is in the deque**: an acknowledgement can arrive, and retirement can compute a raise
+against the pre-insertion deque, while the authority is still at that same revision and would
+accept it. So the revision returned by an admission becomes eligible only after that batch has
+been folded in — including when it had no survivors — and only as a contiguous prefix, never as
+the highest one received. A refusal returns at least the current authoritative revision, and the
+proxy resends only once it has integrated every admission in that new prefix; recomputing from
+the deque is not sufficient by itself, since the recomputation would otherwise rest on the same
+unintegrated state.
 
 ### The proxy's pre-filter is conservative; the Resolver stays authoritative
 
@@ -1053,14 +1063,17 @@ raises as over-retention) are the numbers that decide whether this design is aff
 
 Two observations that bound this:
 
-- **Withdrawal needs no new synchronization *on the normal path*.** The failure path still
-  requires generation-fenced inheritance, a cancellation proof, or the conservative
-  proxy-generation barrier of §4a; process disappearance alone is not withdrawal evidence.
-  On the normal path, the proxy already awaits all of a batch's
-  resolver replies before proceeding — `co_await singleResolverReply` /
-  `co_await getAllAsync(std::move(replies))`
+- **Withdrawal needs no new *blocking* on the normal path, but it is no longer free.** The
+  proxy already awaits all of a batch's resolver replies before proceeding —
+  `co_await singleResolverReply` / `co_await getAllAsync(std::move(replies))`
   (`fdbserver/commitproxy/CommitProxyServer.cpp:1008–1016`) — so `VALIDATION_COMPLETE` maps
-  onto an existing await point. Only the *installation* side needs new ordering.
+  onto an existing await point. What retirement now costs is the raise itself: a conditional,
+  ordered publication with a compare and a possible retry. It need not block a batch, since a
+  delayed raise only over-retains, and it rides the next batch's request when there is one; when
+  there is not, an explicit publication is required, or the over-retention persists for as long
+  as the source stays idle. The failure path still requires generation-fenced inheritance, a
+  cancellation proof, or the conservative proxy-generation barrier of §4a; process
+  disappearance alone is not withdrawal evidence.
 - **Installation adds work to the commit critical path, but no message.** §8.4 settles the
   ordered channel: both installs ride requests the proxies already send to the sequencer, whose
   replies are the acknowledgement, so the expected increase in message count is **zero**. What

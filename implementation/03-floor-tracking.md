@@ -289,22 +289,74 @@ where `I == C` and nothing was written, since those are exactly the ones that cr
 covered work:
 
 ```cpp
-// admission, on every batch
+// admission at the authority, on every batch
 read C, F, sourceRevision;
 I = min(C, max(p, F));
 if (I < C) install(source, I);
 ++sourceRevision;                       // always, even when I == C
-reply { F, I, sourceRevision };
+reply { F, I, sourceRevision, localBatchNumber };
 
-// raise, on retirement
-propose { exactPendingMinimum, expectedSourceRevision };
-apply only if expectedSourceRevision == sourceRevision;   // else refused
+// raise at the authority, on retirement
+apply only if expectedSourceRevision == sourceRevision;   // else refused, replying
+                                                          // with the current revision
 ```
 
-A refused raise is recomputed from the deque and resent; the contribution stays low in the
-meantime, which only over-retains. This is the symmetric counterpart of running admission
-unconditionally: no admission relies on a stale local capability, and no retirement can raise
-the contribution above work admitted after it was computed.
+**The compare alone is not enough: a revision must not become locally usable before its batch is
+in the deque.** The authoritative compare rules out a raise computed *before* an admission the
+authority has already performed. It says nothing about one computed *after* that admission's
+acknowledgement arrived but *before* the proxy folded the batch into the deque, and that window
+is real:
+
+1. The authority admits batch A, installs its coverage, advances `sourceRevision` to 8.
+2. The acknowledgement `{F, I, 8}` reaches the proxy.
+3. Before A's survivor minimum is inserted, retirement computes 200 over the old deque.
+4. It sends `{ newMinimum = 200, expectedRevision = 8 }`.
+5. The authority is still at 8, accepts, and leaves A uncovered.
+
+Eligibility is therefore local, and separate from arrival. A revision becomes usable only once
+the result of its admission is represented in the deque — including when the batch had no
+survivors, which is still a fact about coverage — and only as a **contiguous prefix**, never as
+the highest revision seen:
+
+```cpp
+onAdmissionReply(batch, F, I, sourceRevision):
+    filter(batch, F);
+    insertSurvivorMinimumIntoDeque(batch);          // also when there are none
+    markIntegrated(batch, sourceRevision);
+    advanceContiguousIntegratedRevision();
+
+onRetirement:
+    send { newMinimum:      exactPendingMinimum(),
+           expectedRevision: contiguousIntegratedRevision };
+```
+
+With both halves the argument closes on every order:
+
+- A later admission has already reached the authority → its revision fails the compare.
+- The raise applies first → the next admission reads the raised `C` and lowers it again through
+  `I = min(C, max(p, F))` if it must.
+- The acknowledgement arrived but its batch is not yet integrated → its revision cannot back a
+  raise, because the prefix has not reached it.
+- Replies are observed out of order → only the contiguous prefix advances, so an isolated later
+  revision never becomes eligible on its own.
+
+A refusal replies with at least the current authoritative revision, and the proxy **must not
+resend until it has locally integrated every admission in that new prefix**. "Recompute from the
+deque and resend" is not by itself sufficient: the recomputation would otherwise stand on the
+same unintegrated state that caused the refusal, and could be refused — or accepted while still
+wrong — again. The contribution stays low meanwhile, which only over-retains.
+
+This is the symmetric counterpart of running admission unconditionally: no admission relies on a
+stale local capability, and no retirement can raise the contribution above work admitted after it
+was computed.
+
+**One revision per source, and only one.** It is advanced by every authoritative admission,
+returned bound to the `localBatchNumber` whose admission advanced it, becomes locally eligible
+only after that batch is integrated into the deque, and guards every raise. It is *not* the
+sequence used to discard stale diagnostic acknowledgements
+(`{proxyGeneration, publicationSequence, coveredThroughBatch}`, §4a) — that one orders
+observations, this one is a correctness precondition, and conflating them would make a
+diagnostic ordering rule load-bearing.
 
 **Why `min(C, …)` is load-bearing.** Without it, `C = 100` still covering an earlier pending
 batch, a contaminated `p = 50` and an advanced `F = 150` would install 150 — raising the
@@ -737,7 +789,9 @@ loweringInstallLifetime   = floorRetirementTime − conditionalInstallAckTime
 fraction of batches that lower the installed minimum         // I < C: who mutates the reduction
 duration added to the authority's non-suspending stretch
 exactSurvivorMinimum − installedProxyMinimum                 // deferred-raise over-retention
-raises refused by the revision CAS                           // recomputed and resent
+raises refused by the revision CAS                           // resent after integrating the prefix
+lag from admission acknowledgement to deque integration      // the window that gates eligibility
+raises published with no batch to ride                       // idle sources, else over-retention
 GRV registrations taking the slow path                      // candidateMinimum < acknowledgedSourceMinimum
 new lease copies per client under multi-copy                // each can force a slow path
 proxy pre-rejections, and resolver rejections after passing the filter
