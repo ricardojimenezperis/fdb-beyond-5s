@@ -387,6 +387,39 @@ All verified against `a443d3ee60`:
   `PublicRequestStream` (`GrvProxyInterface.h:227`, `CommitProxyInterface.h:48`) whose
   `verify()` returns `true` unconditionally (`GrvProxyInterface.h:120`). Anything a client
   sends is untrusted input — see §11.
+* **A field an older sender omitted arrives as its wire default, not as your initializer.**
+  Measured on this serializer path, not assumed: a `Version retentionFloor = invalidVersion`
+  member deserialized as **0** from a legacy payload, in a freshly constructed receiver as well
+  as a reused one. Stated carefully:
+
+  > On this FDB FlatBuffers serializer path, a field omitted by an older sender is deserialized
+  > as its wire default; the C++ member initializer does not preserve absence.
+
+  **Consequence, and it is a correctness one: a sentinel cannot represent absence.** The first
+  implementation of F1 used `invalidVersion` to mean "no floor sent". A legacy Commit Proxy
+  would therefore have looked like one reporting a floor of zero, the Resolver's equality check
+  would have fired against it, and the Resolver would have aborted — during exactly the rolling
+  upgrade the change was meant to pass through unnoticed. Neither compilation, nor the
+  conflict-set benchmark, nor a homogeneous simulation could see it; only a wire round-trip
+  test in both directions did.
+
+  **The rule for every field this protocol adds:**
+
+  ```cpp
+  // F1: one optional quantity
+  Optional<Version> retentionFloor;
+
+  // F2: an atomic protocol unit, never two independent Optionals
+  Optional<RetentionFloorInfo> retentionFloorInfo;
+  struct RetentionFloorInfo {
+      Version floor;
+      Generation generation;
+  };
+  ```
+
+  A sentinel does not represent absence, and two separate `Optional`s admit states the protocol
+  does not define — a floor without its generation reads as "a floor with no fencing", which is
+  precisely what the generation exists to prevent (§10).
 * **There is an established idiom for adding wire fields**: append to `serializer(...)`
   gated on the negotiated protocol version, e.g. `if (ar.protocolVersion().hasNativeCdc())`
   in `ClientDBInfo::serialize` (`CommitProxyInterface.h:151–153`) and `hasMutationChecksum()`
@@ -1102,6 +1135,27 @@ Version compatibility (§5, §13):
 * mixed-version cluster: legacy clients never report, the floor never advances, behaviour
   is identical to today;
 * new server, old encoding: absence is distinguished from a zero floor.
+
+## 16a. The validation boundary of this harness
+
+F1 established what the harness can and cannot show, and the same boundary applies to
+everything the floor adds afterwards.
+
+| Direction | Evidence |
+|---|---|
+| current → current | Simulation. `tests/fast/CycleTest.toml`, seeds 101/202/303 with buggify, on the binary built from the change under test: `RetentionFloorFromRequest` 2887, `RetentionFloorDerivedLocally` 0, and the Resolver's equality assert running on every batch. |
+| older → current | Unit test: a legacy payload, really deserialized, handed to the real selection function, which takes the fallback branch. |
+| current → older | Unit test: the older peer ignores the unknown field and keeps every field it knows. |
+| **mixed-version RPC** | **Not covered.** A simulated cluster runs one binary, and restarting tests *replace* the cluster rather than overlapping versions — phase one runs entirely on the old binary, phase two entirely on the new — so no old Commit Proxy ever talks to a new Resolver in this harness. |
+| production | `RetentionFloorDerivedLocally` detects a legacy sender or an absent field **only where the receiver is new**. It cannot observe the opposite direction; a new Commit Proxy talking to an old Resolver increments nothing, because the old Resolver has no such counter. |
+
+> **Real mixed-binary RPC coverage is deferred to F2 and is required before enabling
+> demand-driven floors**, because the single-binary simulator and restarting tests cannot
+> overlap protocol implementations. It needs a cluster of two binaries on real processes;
+> role placement cannot be chosen, so it means reading the recruitment traces to confirm the
+> topology actually occurred, across several attempts. In F1 the cost was not worth the signal,
+> since a wire fault could only break plumbing. In F2 the same fault decides whether a
+> transaction is admitted.
 
 ## 17. Build and test reference
 
