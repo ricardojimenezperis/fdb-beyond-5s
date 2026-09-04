@@ -24,8 +24,7 @@ Memory used: 287.894880 MB
 allocated per node**.
 
 **This reverses a correction made during the audit.** Design 1.0's "~96 B/node" figure was
-**right**. The cross-check (`design-crosscheck.md` X4, `../design/00-overview.md` C3,
-`../design/02-storage.md` S2) rejected it on the strength of the in-tree size budget at
+**right**. The cross-check (`design-crosscheck.md` X4) rejected it on the strength of the in-tree size budget at
 `storageserver.cpp:13276–13313`, which totals 128 allocated bytes. **That comment is stale**;
 the code it documents now produces 88 → 96. The audit was right that α had never been measured
 against RSS, and wrong about the direction of the error.
@@ -410,11 +409,11 @@ subsequent write volume, a sweep cursor or a per-batch budget.
 | Claim | Document | Status |
 |---|---|---|
 | "~96 B/node" | design 1.0 | **Confirmed** (88 → 96) |
-| "the in-tree budget says 128, so ~96 is too low" | `design-crosscheck.md` X4, `../design/00-overview.md` C3, `../design/02-storage.md` S2 | **Wrong** — the comment is stale |
+| "the in-tree budget says 128, so ~96 is too low" | `design-crosscheck.md` X4 | **Wrong** — the comment is stale |
 | "α remains unknown" | `../design/00-overview.md` §1.1 | **Still entirely unmeasured** against RSS. What T0.1 gives is *PTree node-allocation amplification* ≈ 3 nodes/insertion — a different quantity |
 | "81 % of cost = cold unlinks" | `../design/01-resolver.md` §4, `../design/00-overview.md` §4 | **Not supported** here — 9.0 % |
 | baseline 0.57 M txn/s/core | `../design/01-resolver.md` §4 | **Understates** — measured 0.899 M |
-| "search costs barely separate designs" | `../design/01-resolver.md` §4, R42 | Search is **61.5 %** of Detect (T1.1) |
+| "search costs barely separate designs" | `../design/01-resolver.md` §4 | Search is **61.5 %** of Detect (T1.1) |
 | ~10.5× structural, ~2× end-to-end | `../design/01-resolver.md` §4, `../design/00-overview.md` §4 | **Gross removable reclamation share is 8.4 % of Detect** on this workload (T1.1). Not a performance ceiling — Δlookup unmeasured |
 | arena vs keep-freeing | `../design/01-resolver.md` §2.e | Arena buys **0.2 pp** at ovr 0.052, up to **2.0 pp** at ovr 0.89 — but the total collapses there too (T2.2) |
 | "both gains grow with the window" | `../design/00-overview.md` §4 | **Not supported**: 9.0 → 8.3 → 8.6 % across 50/200/500 versions at constant work (T2.2) |

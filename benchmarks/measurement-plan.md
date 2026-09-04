@@ -31,7 +31,7 @@ ConflictSet benchmark needs either a link change there or a new target under
 **T0.1 · `sizeof(PTreeT)` and PTree memory.** `bin/fdbserver -r versionedmaptest`. Prints the
 node size, the allocator size class, and **MB used** for 10⁶ insertions. Compare against
 `mvccStorageBytes` (`StorageServerInterface.h:1266–1272`) for the same mutation count.
-*Settles:* the withdrawn RAM figure — `../design/00-overview.md` §4 C3, `../design/02-storage.md` §7, `questions.md` Q10 first half.
+*Settles:* the withdrawn RAM figure — `../design/00-overview.md` §4, `../design/02-storage.md` §7, `questions.md` Q10 first half.
 The in-tree comment claims 128 allocated bytes (`storageserver.cpp:13276–13313`); this says
 whether that is still true. **~15 min after a build.**
 
@@ -126,7 +126,7 @@ the shapes chosen in advance, which is what invalidated the first two runs of T3
 therefore comes after the floor protocol is implemented**, not alongside it. **~3 days**
 once that prerequisite exists.
 
-**T3.2 · Lookup neutrality (`../design/01-resolver.md` R42).** Model **both modes** (`../design/01-resolver.md` §2.a):
+**T3.2 · Lookup neutrality (`../design/01-resolver.md` §4).** Model **both modes** (`../design/01-resolver.md` §2.a):
 single-epoch accumulation to X — **triggered by allocation, so a pair can form during a floor
 plateau** — **and its death-in-place path** (`floor > maxTS(current)` discards and re-seeds without
 ever forming a pair — a sub-X retirement that X deliberately does not bound in frequency, so the
@@ -143,7 +143,7 @@ Measure reclaimable nodes exposed, catch-up time under the `3 × |write ranges| 
 
 **T3.4 · Keep-freeing envelope — cancelled/superseded.** The `~32 ns` target belongs to the arena
 variant. Keep-freeing is retained only as historical comparison data (T1.2, T2.2); it is no longer
-a prototype candidate (`../design/01-resolver.md` §2.e, R66), so this task carries **no effort estimate and
+a prototype candidate (`../design/01-resolver.md` §2.e), so this task carries **no effort estimate and
 no place in the recommended order**.
 
 ---
@@ -165,7 +165,7 @@ is the one genuinely missing observability — counts and latencies already exis
 Cluster Controller load for the commit pin. Needs the mechanism chosen first. **Days, after a
 design decision.**
 
-**T4.4 · Storage three-path read cost (`../design/02-storage.md` §2, S11).** Latest-value · historical-resident ·
+**T4.4 · Storage three-path read cost (`../design/02-storage.md` §2).** Latest-value · historical-resident ·
 historical-spilled, measured separately. Needs the paged design to exist. Today the point read
 has only two outcomes (`storageserver.cpp:2432–2436`); the middle path is the unmeasured one.
 

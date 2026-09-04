@@ -1,12 +1,11 @@
 # Storage Phase — Paged Version Storage
 
-*Version: **2.0** · supersedes 1.0 — this file's initial commit.*
 *Status: reviewed against `apple/foundationdb` main @ `a443d3ee60`. The design is sound and
 most of its recollections about current internals check out; **one mechanism is misnamed**
 (§1), **one figure contradicts `00-overview.md`** (§7), and **one client-compatibility
 surface needed closing** (§6 — its logical contract is now specified, its encoding left open).
 Claims about current FDB carry `file:line`; unmeasurable
-claims are marked **[measure]**. Changes are listed in §10.*
+claims are marked **[measure]**.*
 
 ## 1. Context *(corrected)*
 
@@ -41,17 +40,16 @@ production implementations of logical-to-physical page remapping and version-awa
 machinery — evidence that the required primitives are native to this codebase. It is *not* yet
 evidence that the Redwood pager can be reused unchanged: PVS history is soft state with
 different recovery semantics (§6), and must not accidentally become a second durable store.
-1.0's "the machinery half-exists" is right as narrative and must not be read as a reuse claim.
+"The machinery half-exists" is right as narrative and must not be read as a reuse claim.
 
-## 2. Core design *(unchanged, with one constraint made explicit)*
+## 2. Core design
 
 Single-version main tree; version chains in shard-local append-only pages addressed
 `(pageID, offset, length)`; spill-not-durability; page-granular reclamation against a moving
 floor. Physical layout, preallocated circular extents, page directory and the two watermarks
 `MRVᵢ` / `MRV_RAMᵢ` are unchanged.
 
-**New in 2.0 — "byte-for-byte today's behaviour" is a testable claim, and a binding
-constraint.** The current hot read path is synchronous and allocation-free: the floor test is
+**"Byte-for-byte today's behaviour" is a testable claim, and a binding constraint.** The current hot read path is synchronous and allocation-free: the floor test is
 `tryGetReadyReadVersion` (`storageserver.cpp:2057–2076`, unit-tested at `:2078–2093`) and the
 lookup goes straight to a root without materializing a `ViewAtVersion` (`:2431`, `:2494`) —
 both introduced by the coroutine-overhead work (`b624489520`).
@@ -79,24 +77,24 @@ that middle path is the one whose cost nobody has measured.
 If the table is to be avoided for resident history too, that needs an explicit mechanism —
 direct RAM pointers with a different representation on spill, say — not merely a requirement.
 
-## 3. Versioned clearRange *(unchanged)*
+## 3. Versioned clearRange
 
 Two-phase logical marks + push-down-on-write certificate. No code claims to verify; the
 invariant ("no post-clear data below this node") is what licenses subtree unlinking without
 inspection, and is the right thing to write as an executable assert.
 
-## 4. Lazy GC *(unchanged, with one missing invariant)*
+## 4. Lazy GC
 
 cts-ordered GC queue consumed as a prefix, generation IDs against ABA, per-node
 "has tombstones" bit, in-place GC only on resident pages.
 
-**New in 2.0 — the reclaimed-link invariant.** §2 justifies page-granular death as "one integer
+**The reclaimed-link invariant.** §2 justifies page-granular death as "one integer
 against a moving floor; live readers protect their pages for free". That argues nobody *needs*
 the content; it does not make surviving **inbound** links safe. A newer version points at an
 older one by `(pageID, offset)`; when the older page dies because `maxCTS < floor`, those links
-persist. And 1.0 explicitly declines to lean on the generation tag for this — it is "an assert,
-not a correctness dependency" (§2) — so the design currently has *no* stated correctness
-mechanism for dangling chain links.
+persist. And the generation tag is explicitly *not* leaned on for this — it is "an assert,
+not a correctness dependency" (§2) — so the design has *no* stated correctness mechanism for
+dangling chain links.
 
 **That characterization must be retired.** Under the optimistic access protocol below, the
 generation is not a debugging assert: it is *the* correctness mechanism, and its publication
@@ -335,25 +333,25 @@ if it was the last eligible replica then revocation has already moved the availa
 and the transaction ends explicitly. Routing by interval is a hint (§6); retry-on-peer is the
 correctness path.
 
-## 7. Cost model *(figure withdrawn, methodology kept)*
+## 7. Cost model — figure withdrawn, methodology kept
 
 A predicted **~8× reduction in structure-only CPU cost** per transaction, end-to-end 5–15 % —
-**[measure]**, and correctly framed by
-1.0 as a dividend rather than the headline.
+**[measure]**, and framed as a dividend rather than the headline.
 
 **The RAM-vs-window figure is withdrawn pending measurement**, aligning this document with
-`00-overview.md` §4 (C3/X4). 1.0's "~96-byte nodes" and "hundreds of MB at 5 s, ~3 GB at
-60 s" quote a per-node figure below the code's own accounting: the in-tree budget comment
-totals **128 allocated bytes** (`storageserver.cpp:13276–13313`) — **stale: measured, the node
-is 88 bytes, allocated as 96** (`../benchmarks/measurement-results.md` T0.1), vindicating 1.0's figure —
+`00-overview.md` §4. The "~96-byte nodes" and "hundreds of MB at 5 s, ~3 GB at 60 s" figures
+quote a per-node size below the code's own accounting: the in-tree budget comment totals
+**128 allocated bytes** (`storageserver.cpp:13276–13313`) — **stale: measured, the node is
+88 bytes, allocated as 96** (`../benchmarks/measurement-results.md` T0.1), which vindicates the
+per-node figure —
 `overheadPerItem = nextFastAllocatedSize(sizeof(PTreeT)) * 4` (`VersionedMap.h:765–766`), and
 the charge actually used for byte budgets is
 `overheadPerItem*2 + (mutationBytes + MutationRef::OVERHEAD_BYTES)*2`
 (`fdbclient/include/fdbclient/StorageServerInterface.h:1266–1272`) — doubled because a
 mutation lives in both the versioned map and `mutationLog` (`storageserver.cpp:885`).
 
-1.0 is already right about the *methodology*: `N_phys = α · λw · W` with **α a measured
-parameter per design** is exactly the correct framing, and the PTree's α does include
+The *methodology* stands: `N_phys = α · λw · W` with **α a measured parameter per design**
+is the correct framing, and the PTree's α does include
 path-copy amplification and tombstones. What must not survive is quoting a number for α before
 measuring it. `versionedMapTest()` already prints `sizeof(StorageServer::VersionedData::PTreeT)`
 at runtime (`storageserver.cpp:13318`, via `fdbserver -r versionedmaptest`); comparing measured
@@ -372,7 +370,7 @@ RSS growth against `mvccStorageBytes` is ~2 hours of work and redraws the figure
   `fdbserver/cdcproxy/CDCProxy.cpp` and `ClientDBInfo::nativeCdcEnabled`
   (`fdbclient/include/fdbclient/CommitProxyInterface.h:116`, serialized at `:146`). Its
   retention contract needs the same question asked of it.
-- **fetchKeys — sharper than 1.0 states, and the current code sidesteps it.** Today the
+- **fetchKeys — sharper than it first appears, and the current code sidesteps it.** Today the
   destination does **not** build history out of order: it picks
   `shard->transferredVersion = data->version.get() + 1` and calls `createNewVersion` on it
   (`storageserver.cpp:7921–7927`), i.e. it inserts at a *new highest* version. The in-tree
@@ -380,70 +378,13 @@ RSS growth against `mvccStorageBytes` is ~2 hours of work and redraws the figure
   (`batch->changes[0].version`) "never introduces extra versions into the data structure, but
   violates some ASSERTs currently". So insert-below-head is a requirement the **new** design
   creates, and there is already in-tree evidence that the correct choice breaks current
-  assertions. 1.0's ranking of this as the most serious structural stress is, if anything,
-  understated.
+  assertions. Ranking this as the most serious structural stress is, if anything, understated.
 - **Watches, byte sampling, Ratekeeper knobs, Redwood page headers** — unchanged.
 
-## 9. Validation *(unchanged, with one addition)*
+## 9. Validation
 
 Deterministic simulation with a reference model and the suffix invariant as executable
 specification; the full FDB simulation suite; TSS pairing. **Addition:** the TSS comparison
 needs an explicit rule for the one class of divergence that *is* the feature — a modified SS
 and a stock SS will legitimately disagree on old-version reads. Without that rule TSS evidence
 is unusable here (the same caveat is recorded in `00-overview.md` §5).
-
-## 10. Changelog 1.0 → 2.0
-
-| # | Change | Basis |
-|---|---|---|
-| S1 | §1: **"continuous structural compaction" corrected** — `forgetVersionsBefore` drops roots and defers refcount frees; there is no rebalancing or path rewriting, and `compact()` is called only by a benchmark | `VersionedMap.h:788–836`, `:67–77`, `:871–882`; `BenchVersionedMap.cpp:442` |
-| S2 | §7: **RAM-vs-window figure withdrawn** pending measurement; "~96-byte" and "~3 GB at 60 s" contradict `00-overview.md` §4. Methodology (α measured per design) kept — it was already right | `storageserver.cpp:13276–13313`; `VersionedMap.h:765–766`; `StorageServerInterface.h:1266–1272` |
-| S3 | §6: **`too_old_local` is a new client-visible error** — protocol-version gating, legacy-client degradation and mixed-version simulation required; `future_version` exists, this does not | `error_definitions.h:45`; `CommitProxyInterface.h:151–153` |
-| S4 | §5: **revocation gap named** — 1.0 specifies only lazy discovery; `03-floor-tracking.md` §7a adds an admission-time clamp. Recorded as an extension by 03, not an inheritance from 02 | `03-floor-tracking.md` §7a |
-| S5 | §2: hot-path preservation introduced as an **acceptance criterion**; today's path is synchronous and allocation-free. *Subsequently narrowed by S11* to reads satisfied by the single-version main tree | `storageserver.cpp:2057–2076`, `:2431`, `:2494` |
-| S6 | §8: change feeds **do not pin the MVCC floor** through `proposedOldestVersion` today; the question narrows | `storageserver.cpp:10453–10462` |
-| S7 | §8: **native CDC added** as a second internal consumer the list omitted | `fdbserver/cdcproxy/`, `CommitProxyInterface.h:116` |
-| S8 | §8: fetchKeys — today's code avoids insert-below-head by choosing `version + 1`, with an in-tree FIXME saying the correct alternative breaks assertions | `storageserver.cpp:7921–7927` |
-| S9 | §9: TSS divergence rule added | `00-overview.md` §5 |
-| S10 | §1, §5, §6 **verified against code** — Redwood's versioned pager, every-read-passes-through, free-space tracking, `minimumRetainedVersion` absent, history not recovered on restart, recovery invalidates history | see cites inline |
-
-Second review round — executable invariants:
-
-| # | Change | Basis |
-|---|---|---|
-| S11 | §2: hot-path criterion **corrected from two paths to three**. `rv ≥ MRV_RAMᵢ` says the history is resident, not that the chain is unnecessary; `(pageID, offset)` links must be translated even for resident pages. Latest-value / historical-resident / historical-spilled must be benchmarked separately | review; 02 §2 addressing model, `storageserver.cpp:2432–2436` |
-| S12 | §4: **reclaimed-link invariant added.** "Nobody needs the content" does not make surviving inbound links safe, and 1.0 explicitly declines to lean on the generation tag for correctness. Four candidate mechanisms; simulation property and six cases | review |
-| S13 | §6: `too_old_local` given **endpoint semantics** — never invalidates the transaction, never re-acquires an RV, `transaction_too_old` only on routing exhaustion; legacy degradation; the revoke/route race declared expected. Precedent: `wrong_shard_server` retries without touching `readVersionFuture` | `NativeAPI.cpp:1786–1787`, `:1914–1915`, `:1921` |
-| S14 | §1: Redwood restated as **precedent, not a reusable component** — its pager serves a durable store with recovery semantics; PVS history is soft state and must not become a second durable store | review; §6 |
-| S15 | §7: "~8× per transaction" disambiguated to a predicted **~8× reduction in structure-only CPU cost** | review |
-
-Third review round — closing the concurrency gap:
-
-| # | Change | Basis |
-|---|---|---|
-| S16 | §4: **resolved-page lifetime invariant added.** Safe navigation is not safe lifetime; generation IDs detect ABA but do not prevent use-after-free. Reclamation ordering, and both admissible mechanisms (pin-before-use / check-after-use) grounded in existing SS precedent. *Subsequently generalized by S21* into the resolved-page **access** invariant | `storageserver.cpp:11091–11096`, `:2438–2442` |
-| S17 | Closing sentence corrected — it still promised "the hot path when `rv ≥ MRV_RAM` stays exactly what it is today", which S11 had already retired | review |
-| S18 | Changelog S5 marked **superseded by S11** rather than left contradicting the current text | review |
-| S19 | §4: **check-after-use precondition** stated — admissible only with operation-owned materialization and revalidation before decode/traverse/expose; otherwise a guard. Per-path assignment made explicit, and §2's existing "scratch buffer, discarded" policy identified as what already satisfies it for spilled reads | review; 02 §2 residency policy |
-| S20 | Status line and §6 heading corrected — the new-error contract is **specified** (S13); only its encoding remains open | review |
-| S21 | §4: the lifetime invariant made a **disjunction** (guarded *or* optimistic) — as written it stated only the guarded protocol while the text admitted the optimistic one, which deliberately permits reuse during outstanding I/O. Optimistic ordering added: publish the generation change before reuse, validate before decode, forbid reuse/wraparound within an outstanding operation's lifetime | review |
-| S22 | §2/§4: the generation tag's "an assert, not a correctness dependency" **retired** — under the optimistic protocol it is the correctness mechanism, and its publication order and representation are load-bearing | review; 02 §2 |
-| S23 | §4: the counter condition **restated without time** — "wide enough for the maximum outstanding-I/O window" is not a proof, since a coroutine may stay suspended indefinitely. Replaced by a non-wrapping counter with exhaustion failing rather than wrapping. Noted that `thisServerID` cannot serve as the incarnation (persisted at `storageserver.cpp:11141`, re-read at `:11503`). *Scope subsequently corrected in S24* | review; `storageserver.cpp:11141`, `:11503` |
-| S24 | §4: the non-repetition **scope corrected** — it is the lifetime of the authority that can hold references, not the process or the disk. `serverIncarnation` → `directoryIncarnation`, volatile, renewed on directory init/reset and retired only after outstanding operations drain or are fenced. S23's claim that the incarnation is load-bearing "on the on-disk side" is **withdrawn**: residual extents survive as bytes but not as identity, so after a restart no observer remains and repetition cannot produce ABA. Caveat added for any future implementation that reconstructs history from residual extents | review; §6, `storageserver.cpp:1602–1613` |
-| S26 | **T0.1 measured (2026-09-04):** the SS PTree node is 88 B, allocated 96 — 1.0's "~96 B/node" was right and the in-tree 128-byte comment is stale. S2's reason is withdrawn; the figure stays withdrawn only pending α against RSS. Allocation amplification ≈ 3 nodes/insertion, between `overheadPerItem`'s 4 and `mvccStorageBytes`'s 2 | `../benchmarks/measurement-results.md` T0.1 |
-| S25 | §4: `thisServerID` narrowed to "cannot serve **by itself**" — it may be a component of a composite identity, but supplies no discrimination between directory lifetimes | review |
-
-**Unchanged and confirmed:** the core design (single-version tree, chains in shard-local
-append-only pages, spill-not-durability, page-granular reclamation), the residency model and
-its two watermarks, versioned `clearRange` with the push-down certificate, lazy GC, the
-soft-state availability model with its suffix invariant and self-expiring repair debt, and the
-framing of structural CPU as a dividend rather than the headline.
-
-## In one sentence
-
-> Keep one thin current tree in RAM and hang immutable version chains off it in shard-local
-> append-only pages that die whole against a moving floor; history is replicated soft state
-> with a contiguous per-replica suffix, so extending the retained window becomes an operator
-> disk budget instead of pinned RAM — and latest-version reads satisfied by the single-version
-> main tree keep today's synchronous, allocation-free path, while resident-history and
-> spilled-history costs stay separately measurable.
