@@ -8,19 +8,24 @@ mechanism left to §8.4. Claims about current FDB carry `file:line`.*
 
 ## 1. Why this protocol must exist
 
-Every retention decision begins with one client-side observation:
+**Two populations need protection, and they are aggregated separately.** Live transactions
+still executing in client libraries, and commits already received by a Commit Proxy whose
+validation has not finished. Each is reduced to a minimum by the component that already holds
+the detail; only aggregated minima travel over the network.
 
-`globalOldestClientRV = min { RV(t) : client transaction t still holds a live snapshot }`
+`globalOldestClientRV   = min { clientOldestActiveRV over clients with a valid lease }`
+`oldestInFlightCommitRV = min { commitProxyOldestInFlightRV over Commit Proxies }`
 
-Storage derives its read-retention demand directly from it. **Resolver validation does not**:
-after the lifecycle handoff of §4a it additionally includes accepted-but-not-yet-validated
-commits whose client-side lifetime may already have ended —
+Storage derives its read-retention demand from the client minimum alone: a pending commit
+needs conflict history, not historical *values* — its reads already happened. **Resolver
+validation needs both**, because after the lifecycle handoff of §4a it must also cover
+accepted-but-unvalidated commits whose client-side lifetime may already have ended —
 
 `globalValidationDemand = min(globalOldestClientRV, oldestInFlightCommitRV)`
 
 — and the handoff guarantees continuous coverage between the two sources. **Retention is
 therefore not one number but two derivations from a common reduction:** storage consumes the
-client observation; the resolver additionally consumes the server-side pin.
+client observation; the resolver additionally consumes the Commit Proxies' pending minimum.
 
 Today's FoundationDB does not produce the client-side observation either. **Verified:** `GrvProxyData`
 (`fdbserver/grvproxy/GrvProxyServer.cpp:187–211`) keeps no per-client state of any kind, and
@@ -31,15 +36,38 @@ library.**
 
 ## 2. Client side: a monotonic minimum
 
-- `clientFloor = min(activeRVs)` — while transactions are active
-- `clientFloor = max(clientFloor, latestGrantedRV)` — when `activeRVs` is empty
-- and `clientFloor` never decreases
+The client library already knows the read version of every transaction it has alive, so it
+keeps the detail and publishes only a scalar:
+
+```
+activeReadVersions = { RV of active transactions }
+                   ∪ { RV of transactions whose commit was sent but has no terminal result }
+
+clientOldestActiveRV = min(activeReadVersions)
+```
+
+and publishes `{clientID, leaseGeneration, clientOldestActiveRV}` — **never one entry per
+transaction**. When `activeReadVersions` is empty the client reports
+`max(clientOldestActiveRV, latestGrantedRV)`, and the reported value never decreases.
+
+The library can advance its minimum precisely because it holds the detailed set:
+
+```
+active RVs: {100, 130, 170}   →  publishes 100
+transaction with RV 100 ends
+active RVs: {130, 170}        →  publishes 130
+```
 
 Monotonicity is load-bearing: when the oldest transaction ends the floor advances, and that
 version is irrevocably abandoned by this client. Published values may lag
 (`reportedMin ≤ localMin`); lag only over-retains, never under-retains.
 
-Manually set read versions bypass the sensor.** `Transaction::setVersion(v)`
+**Read-only transactions are covered here and nowhere else.** They never reach a Commit
+Proxy, so this client-side minimum is the only thing protecting their snapshots — which makes
+it indispensable for the *storage* side, the consumer that exists to serve them
+(`storageReadFloor`, §6).
+
+**Manually set read versions bypass the sensor.** `Transaction::setVersion(v)`
 (`fdbclient/NativeAPI.cpp:3594–3603`) validates only `v > 0` and that no read version is
 already set; it contacts no proxy and records
 `trState->readVersionObtainedFromGrvProxy = false` (`:3602`). Such a transaction is invisible
@@ -122,8 +150,8 @@ becomes a false accept.** Both outcomes are unacceptable, and both are removed b
 rule.
 
 **A client-side hold does not fix it.** Keeping the client's registration until the commit
-reply contradicts §4: leases exist precisely because a crashed client sends nothing. Once the commit is accepted, the pin must be owned by
-a server.
+reply contradicts §4: leases exist precisely because a crashed client sends nothing. Once the
+commit is admitted, coverage must be owned by a server.
 
 The rule is the mirror of register-before-use:
 
@@ -139,97 +167,155 @@ Commit *submission* is not the handoff — a message in flight can be lost.
 `CLIENT_COVERED` → `HANDOFF_ACCEPTED` → `VALIDATION_COMPLETE`
 
 - **`CLIENT_COVERED`** — only the client's lease guarantees retention.
-- **`HANDOFF_ACCEPTED`** — the Commit Proxy has validated the registration and installed a
-  generation-fenced server-side pin for the request's read version in the floor-reduction
-  path. From here, client death or lease expiry is harmless.
-- **`VALIDATION_COMPLETE`** — every Resolver has finished; the pin is withdrawn.
+- **`HANDOFF_ACCEPTED`** — the commit's `read_snapshot` is covered by the Commit Proxy's
+  pending minimum, and that minimum participates in the reduction. From here, client death or
+  lease expiry is harmless.
+- **`VALIDATION_COMPLETE`** — the batch is terminal; its contribution is withdrawn.
 
 > Commit submission alone does not transfer retention responsibility. The handoff completes
-> only when the Commit Proxy has validated the registration and installed the pin. Until that
-> acknowledgement the client lease remains responsible. A request whose client registration
-> expires before the handoff is rejected as `transaction_too_old` — not new behaviour; the
-> client retry loop already handles it.
+> only when the proxy's updated minimum is in the reduction. Until then the client lease
+> remains responsible. A commit whose coverage lapses before that point is rejected as
+> `transaction_too_old` — not new behaviour; the client retry loop already handles it.
 
-### The Commit Proxy becomes a second source in the reduction
+### The Commit Proxy contributes an aggregated minimum, not per-transaction pins
 
-The pin must be *ordered* with respect to floor advance: it is not enough for the proxy to
-hold it locally and propagate it eventually, because the floor could advance during that
-propagation. The clean formulation makes accepted-but-unvalidated commits a second input to
-the `min` (formulas in §6), with the proxy:
+**No new per-transaction server state is created.** A commit that reaches a Commit Proxy is
+already held in that proxy's existing batch structures until validation finishes; the floor
+protocol reuses that detail rather than duplicating it. What the proxy publishes is a scalar:
 
-1. receiving the commit;
-2. checking the registration is still valid and that `r` is not below the published floor;
-3. adding `r` to `oldestInFlightCommitRV`;
-4. making that pin visible to the floor protocol;
-5. only then accepting the handoff and releasing the client's coverage;
-6. withdrawing the pin once all Resolvers have completed validation.
+```
+batchOldestReadSnapshot      = min(read_snapshot of the commits admitted into that batch)
+commitProxyOldestInFlightRV  = min(batchOldestReadSnapshot over its non-terminal batches)
+oldestInFlightCommitRV       = min(commitProxyOldestInFlightRV over all Commit Proxies)
+```
 
-The Commit Proxy is a natural custodian: it already holds per-batch state and already computes
-a resolver-visible horizon (`fdbserver/commitproxy/CommitProxyServer.cpp:2104`). The
-alternative — the client holds the lease until the full result *and* the proxy installs the
-pin before expiry — can be made safe, but proving it still requires defining the order between
-registration, expiry and publication. The first is therefore preferred.
+with `min(∅) = currentVersion` as everywhere else. The new state is at most **one scalar per
+batch**, computed while the batch is being built, and held until the whole batch reaches a
+terminal state. Holding a batch's contribution until its last transaction finishes
+over-retains slightly and is safe. With a single active batch a single scalar suffices; with
+several concurrent batches, a small queue of the batches that already exist — pop the head
+when batches finish in order, or mark terminal and advance the head when they can finish out
+of order.
+
+**Name it `readSnapshot` (or `inFlightReadVersion`), never `commitVersion`.** The history that
+must survive is the history from the commit's *read* version, not the version eventually
+assigned to it. Where other documents use CTS for this read version, say so explicitly.
+
+The Commit Proxy is the natural custodian precisely because it needs no new bookkeeping: the
+transactions are already in the batch, and it already computes a resolver-visible horizon
+(`fdbserver/commitproxy/CommitProxyServer.cpp:2104`).
+
+**What must be ordered is the contribution, not an object.** It is not enough for the proxy
+to update a local minimum and propagate it eventually — the floor could advance during that
+propagation. The sequence is:
+
+1. the commit arrives;
+2. the proxy checks `read_snapshot ≥ publishedFloor`;
+3. the commit's `read_snapshot` enters the proxy's pending minimum;
+4. that minimum is made visible to the aggregation;
+5. only then is the commit admitted for validation, and the client's coverage may lapse;
+6. the batch's contribution is withdrawn once the batch reaches a terminal state.
+
+### What the handoff is, and is not
+
+The handoff transfers **coverage**, not a set of transactions:
+
+```
+covered by globalOldestClientRV
+              ↓ overlap
+covered by oldestInFlightCommitRV
+```
+
+The required property:
+
+```
+COMMIT_ADMITTED ⇒ its read_snapshot is covered by the client minimum
+                ∨ covered by some Commit Proxy's pending minimum
+                ∨ its generation is fenced from durable decisions
+                ∨ a terminal result already exists
+```
+
+**Per-client server-side commit state is explicitly excluded from the design.** Constructs of
+the shape `oldestPendingRV[client]`, `acceptedPendingCount[client]`, or any server-side
+collection of commits grouped by client contribute nothing to the floor and complicate
+everything else: commits from one client reaching different proxies, out-of-order completion,
+proxy recovery, per-client memory, cleanup and ownership, and identifying which read version
+becomes the next minimum. The division of responsibility is:
+
+| Component | Keeps | Publishes |
+|---|---|---|
+| Client library | the detail of its own live transactions | one minimum per client |
+| Commit Proxy | the batch detail it already has | one minimum over its pending work |
+| Aggregator | per-source minima | the global minimum, monotonically |
+| Resolver | — | applies the `currentVersion − W_commit` lower bound |
+| Storage | — | consumes the client minimum only |
 
 ### Why the combined minimum stays monotone
 
-`oldestInFlightCommitRV` need **not** be monotone in isolation: a newly accepted request may
-carry an RV below every other in-flight request. Monotonicity of the system comes from the
-handoff overlap, not from each source being monotone on its own:
+`oldestInFlightCommitRV` need **not** be monotone in isolation: a newly admitted commit may
+carry a read version below every other pending one. Monotonicity of the system comes from the
+overlap, not from each source being monotone on its own:
 
-1. Before handoff, the client registration contributes a value no greater than the request's
-   RV `r`.
-2. The proxy installs the request pin at `r` **before** that contribution may disappear.
+1. Before the handoff, the client registration contributes a value no greater than the
+   commit's `read_snapshot` `r`.
+2. The proxy's pending minimum covers `r` **before** that contribution may disappear.
 3. During the transition both are present.
-4. Afterwards the pin remains, until validation completes.
+4. Afterwards the proxy's minimum covers `r` until the batch is terminal.
 5. Therefore no contribution `≤ r` ever vanishes while `r` is still needed.
-6. A request whose `r` is below the already published floor is rejected.
+6. A commit whose `r` is below the already published floor is rejected.
 
-The published floor is additionally defined as
-`publishedFloor = max(previousPublishedFloor, newlyDerivedFloor)`, so publication is monotone
-by construction even if a derived value momentarily is not.
+Publication is monotone by construction: `publishedFloor = max(previousPublishedFloor,
+newlyDerivedFloor)`.
 
-### Identity: what the proxy actually checks
+### What the proxy actually has to check
 
-"The registration is still valid" needs an identity to check *against*. The commit request
-carries the `clientID` and `leaseGeneration` under which its read version was protected — the
-read version itself is already on the wire as `transaction.read_snapshot`, so only the two
-identity fields are new, appended to `CommitTransactionRequest::serialize`
-(`fdbclient/include/fdbclient/CommitProxyInterface.h:203–229`) under the same
-protocol-version gating as §3. Note this is also a `PublicRequestStream` (`:44`), so those
-fields are untrusted input and fall under §7a's ownership rules.
+The check that matters at admission is **`read_snapshot ≥ publishedFloor`**, together with
+installing the new contribution atomically with respect to any subsequent floor advance.
+Validating a *specific* client registration is not required for this step: what makes the
+commit safe is that its read version is still above the floor and that its coverage is in the
+reduction before the floor can move again.
 
-Handoff validation binds the server-side pin to that identity, generation and RV. The proxy
-must verify the registration against the **authoritative lease state** — or through a
-generation-fenced handoff operation in the floor protocol — rather than trusting a
-possibly-stale broadcast watermark.
+Client identity remains necessary — but for a different purpose: protecting lease entries
+against collisions, impersonation and updates from other incarnations of the same client
+(§7a). `clientID` and `leaseGeneration` ride the commit request, appended to
+`CommitTransactionRequest::serialize`
+(`fdbclient/include/fdbclient/CommitProxyInterface.h:203–229`) under the same protocol-version
+gating as §3; note this is a `PublicRequestStream` (`:44`), so both are untrusted input.
 
-**The critical operation must be linearized with respect to expiry.** Exactly one of two
-events wins:
+**The linearization obligation stands.** What must be ordered, by one authority, is:
 
-- lease expiry **before** handoff → the request is rejected (`transaction_too_old`); or
-- installation of the server-side pin **before** expiry → subsequent client death is
-  irrelevant.
+1. the disappearance of a client contribution through lease expiry;
+2. the incorporation of the commit into the proxy's effective minimum;
+3. the irreversible advance and publication of the floor.
 
-The transport that achieves this is an implementation choice (§8.4); the linearization
-condition is not.
+Exactly one of two events wins: expiry **before** the contribution is in the reduction, and
+the commit is rejected `transaction_too_old`; or the contribution enters the reduction
+**before** expiry, and subsequent client death is irrelevant. One workable shape is for the
+aggregator to acknowledge the proxy's updated minimum only once that contribution
+participates in the reduction, and for the commit to count as admitted only then. The
+transport is an implementation choice (§8.4); the ordering is not.
+
 
 ### Proxy failure does not withdraw coverage
 
-The await of §9 closes the *normal* withdrawal path. It does not close this one: the proxy
-installs the pin, accepts the handoff, dispatches to the Resolvers, and **dies before all
-replies arrive**. If the Cluster Controller drops the dead proxy's source from the reduction
-merely because the process disappeared, the floor advances while a request that still holds `r`
-is alive in a Resolver — the very gap §4a exists to close. The invariant is the server-side
-mirror of §4:
+The await of §9 closes the *normal* withdrawal path. It does not close this one: the proxy's
+minimum enters the reduction, the commit is admitted, the batch is dispatched to the
+Resolvers, and the proxy **dies before all replies arrive**. If the Cluster Controller drops
+the dead proxy's source from the reduction merely because the process disappeared, the floor
+advances while a commit at `r` is still alive in a Resolver — the very gap §4a exists to
+close. The invariant is the server-side mirror of §4:
 
-> **The death of a pin's custodian is not the termination of the requests that pin protects.**
-> Loss or replacement of the Commit Proxy owning an in-flight pin may not remove that pin from
+> **The death of the process publishing a minimum is not the termination of the work that
+> minimum covers.** Loss or replacement of a Commit Proxy may not remove its contribution from
 > the reduction merely because the process disappeared. Exactly one of the following must hold
-> before its contribution is withdrawn: (1) a successor recovers or inherits the
-> generation-fenced in-flight pins; (2) every associated Resolver request is fenced or proven
-> unable to complete; or (3) a conservative generation barrier retains the proxy's last
-> published minimum until all requests of that generation are guaranteed closed. Delayed
-> cleanup may over-retain; process disappearance alone is never withdrawal evidence.
+> before withdrawal: (1) a successor recovers or inherits the generation-fenced pending
+> minima; (2) every associated Resolver request is fenced or proven unable to complete; or
+> (3) a conservative generation barrier retains the proxy's last published minimum until all
+> requests of that generation are guaranteed closed. Delayed cleanup may over-retain; process
+> disappearance alone is never withdrawal evidence.
+
+Because the contribution is a scalar, option (3) is cheap: the aggregator keeps the dead
+proxy's last published minimum. There is nothing per-transaction to inherit or reconstruct.
 
 **What FDB's current architecture already gives us.** A single commit proxy failure does not
 get a successor: `waitCommitProxyFailure` is `quorum(failed, 1)` raising `commit_proxy_failed()`
@@ -258,7 +344,7 @@ the whole generation — master, proxies, **resolvers** and TLogs are recruited 
   consumed by a live Commit Proxy or reach a durable decision: recovery locks the previous
   epoch's TLogs and fixes its `epochEnd` (`fdbserver/logsystem/LogSystem.cpp:420`), so no
   old-generation commit can be made durable. *That* — not process disappearance, and not the
-  expiry of a timeout — is the proof that the pins may be retired. This is the same shape as
+  expiry of a timeout — is the proof that the contribution may be withdrawn. This is the same shape as
   the GRV-proxy-generation barrier already required in §7.
 - **Forward-looking:** if FDB ever gains single-proxy replacement without a full recovery, this
   reduction fails and inheritance or explicit fencing becomes mandatory. Any such change must
@@ -268,13 +354,13 @@ the whole generation — master, proxies, **resolvers** and TLogs are recruited 
 
 The property to check at every boundary:
 
-`HANDOFF_ACCEPTED ⇒ pin visible ∨ request generation fenced from influencing a durable decision ∨ terminal validation outcome already known`
+`HANDOFF_ACCEPTED ⇒ covering minimum in the reduction ∨ generation fenced from influencing a durable decision ∨ terminal validation outcome already known`
 
 (*"fenced from influencing a durable decision"*, not *"fenced from validation"*: an old
 Resolver may still execute and still produce a reply — what must be impossible is that any
 authorized party consumes it to decide.)
 
-- proxy dies after installing the pin but before accepting the handoff;
+- proxy dies after its updated minimum enters the reduction but before admitting the commit;
 - dies after the handoff and before dispatching to the Resolvers;
 - dies after dispatching to only some of them;
 - all Resolvers reply, but the proxy dies before withdrawing or publishing the withdrawal;
@@ -289,9 +375,10 @@ A hierarchical `min` reduction: client library → GRV proxy (over valid leases)
 Controller → `globalOldestClientRV` → broadcast → derived floors (§6).
 
 The property is **not** that no component tracks transactions individually — once §4a exists,
-Commit Proxies track their pins. It is that *the hierarchy transports minima rather than a
+Commit Proxies track a minimum over their pending batches. It is that *the hierarchy
+transports minima rather than a
 cluster-wide transaction list*: clients track their own active read versions to compute their
-minimum, Commit Proxies track only their accepted-but-unvalidated request pins, and the Cluster
+minimum, Commit Proxies reuse the batch detail they already hold, and the Cluster
 Controller aggregates per-source minima. No component holds a global registry of transactions.
 
 Empty reductions are defined **independently per source**: `min(∅) = currentVersion`. Two
@@ -308,7 +395,7 @@ source of §4a. Precisely:
 
 Register-before-use (§3) and handoff-before-release (§4a) jointly make this safe: every
 consumer is covered first by a client registration and, after commit acceptance, by an
-overlapping server-side pin.
+overlapping Commit Proxy minimum.
 
 **Open — §3 and §5 are in tension.** Having clients report to a *stable* GRV proxy ("one
 lease copy, no deduplication") cannot coexist with §3's piggybacking on `GetReadVersion`,
@@ -336,8 +423,9 @@ precision. **Choose explicitly.**
 
 **Sources** (each with `min(∅) = currentVersion`):
 
-- `globalOldestClientRV = min(valid client registrations)`
-- `oldestInFlightCommitRV = min(accepted, not-yet-validated commit requests)` — §4a
+- `globalOldestClientRV = min(clientOldestActiveRV over valid client registrations)` (§2)
+- `oldestInFlightCommitRV = min(commitProxyOldestInFlightRV)`, each proxy reducing
+  `batchOldestReadSnapshot` over its non-terminal batches — §4a
 - `globalValidationDemand = min(globalOldestClientRV, oldestInFlightCommitRV)`
 
 **Derived floors:**
@@ -494,9 +582,9 @@ many thousands of client processes that is new memory and new periodic work on a
 critical role; under the multi-copy resolution of §5 it multiplies by the proxy count. Size it
 before choosing lease duration (§8.1) — the two decisions are coupled.
 
-**Commit Proxies also acquire new transient state (§4a):** one generation-fenced pin per
-accepted request — or an equivalent counted or per-batch representation — maintained as
-`oldestInFlightCommitRV` and retained until every Resolver has completed validation.
+**Commit Proxies acquire far less (§4a):** one scalar per non-terminal batch — the minimum
+`read_snapshot` admitted into it — reduced to `commitProxyOldestInFlightRV`. The transactions
+themselves are already in the batch, so no per-commit collection is added.
 
 Two observations that bound this:
 
@@ -520,8 +608,8 @@ This cost may exceed the lease map's and deserves its own benchmark.
 > Each client library maintains a monotonic minimum active read version, piggybacked on GRV
 > requests and kept alive by a lease only while snapshots live; GRV proxies and the Cluster
 > Controller reduce it by `min` into a single global watermark; retention responsibility is
-> handed to a server-side pin on the accepted commit before the client's coverage is released
-> and held until validation completes or the request's generation is fenced from influencing a
-> durable decision. Delays may over-retain; reclamation may precede the last consumer only through
+> handed to the Commit Proxies' minimum over their pending batches before the client's
+> coverage is released, and held until validation completes or the generation is fenced from
+> influencing a durable decision. Delays may over-retain; reclamation may precede the last consumer only through
 > explicit recovery or priced-revocation semantics, under the existing `transaction_too_old`
 > contract — never silently.
