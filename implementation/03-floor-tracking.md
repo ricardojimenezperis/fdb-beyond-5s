@@ -482,11 +482,31 @@ load-balanced (`NativeAPI.cpp:5300`). Both cannot hold.
 * **Accept multi-copy leases** — each proxy holds its own `{clientID → minRV}`. Still
   correct: floors are monotone, so a stale copy is an older value and the global `min` is
   conservative. Costs: up to `numProxies` entries per client, and the floor advances only as
-  fast as the *least recently refreshed* copy — for an idle client, a full lease period. A
-  **in v1 a renewal refreshes the copies the client knows it holds, and any others are left to
+  fast as the *least recently refreshed* copy — for an idle client, a full lease period.
+  **In v1 a renewal refreshes the copies the client knows it holds, and any others are left to
   expire** — renewing one copy does not update the rest, and they do not catch up on their own.
   Aiming `RenewOldestReadVersion` at a single designated copy is a possible optimization, not
   the v1 rule.
+
+  **That rule has a protocol consequence: the client must be able to tell which proxy holds
+  each copy.** GRV requests are load-balanced (`NativeAPI.cpp:5300`), so after the fact the
+  client cannot infer who installed its registration. The acknowledgement must therefore
+  identify the granting copy — at minimum
+
+  ```cpp
+  struct GrantedReadVersionLease {
+      UID    grvProxyID;          // which copy this acknowledgement installed
+      UID    leaseGeneration;
+      double clientUsageDeadline; // the window of §9, measured from before the request was sent
+      // plus whatever is needed to validate the grant
+  };
+  ```
+
+  This is not a third open choice — the shape may vary, and an equivalent way of recovering the
+  endpoint from the RPC would do — but it **is** a requirement on F2's implementation and its
+  tests: without copy identity in the acknowledgement, a client cannot literally obey the rule
+  of refreshing every copy it holds, and multi-copy degrades into "refresh whichever proxy the
+  next request happens to reach".
 
 **Decided for v1: multi-copy, with no global deduplication.** It leaves the GRV hot path
 untouched and pays only in retention precision. **Under the floor-based conditional-install
@@ -516,8 +536,9 @@ guard**: `conditionalInstallClientMinimum` against `authoritativeStorageAdmissio
 transport and machinery, never guards. The acceptance criterion covers both generation
 barriers: GRV proxy failure for the first, Commit Proxy failure for the second. Candidates: a
 generation-fenced operation in the floor protocol, or the proxy participating as a source and
-awaiting confirmation before admitting the batch — possibly subsumed into the transport choice
-of §6.1.
+awaiting confirmation before admitting the batch. It may reuse the machinery chosen for
+consumer-scoped publication (§6.1, now decided), provided the comparison and the installation
+stay atomically ordered at the authority.
 
 **The ordering obligation is not a choice** (the mechanism is). One authority must order:
 removal and update of source contributions; installation of Commit Proxy minima; and the

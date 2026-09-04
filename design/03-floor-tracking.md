@@ -730,7 +730,7 @@ Register-before-use (§3) and handoff-before-release (§4a) jointly make this sa
 consumer is covered first by a client registration and, after commit acceptance, by an
 overlapping Commit Proxy minimum.
 
-**Open — §3 and §5 are in tension.** Having clients report to a *stable* GRV proxy ("one
+**Resolved for v1 — §3 and §5 were in tension.** Having clients report to a *stable* GRV proxy ("one
 lease copy, no deduplication") cannot coexist with §3's piggybacking on `GetReadVersion`,
 because GRV requests are **load-balanced across all GRV proxies today** —
 `basicLoadBalance(cx->getGrvProxies(...), &GrvProxyInterface::getConsistentReadVersion, ...)`
@@ -749,6 +749,13 @@ because GRV requests are **load-balanced across all GRV proxies today** —
   cannot be assumed to catch up on their own. Directing `RenewOldestReadVersion` (§3) at a
   single designated copy is a possible optimization, not the v1 rule. Safety is conservative
   either way; precision is bounded by the oldest surviving copy.
+
+  **This makes copy identity a protocol requirement.** GRV requests are load-balanced
+  (`NativeAPI.cpp:5300`), so a client cannot infer afterwards which proxy installed its
+  registration. The acknowledgement must name the granting copy — a `{grvProxyID,
+  leaseGeneration, clientUsageDeadline}` grant, or an equivalent way of recovering the endpoint
+  from the RPC. Without it a client cannot obey the rule of refreshing every copy it holds, and
+  multi-copy silently becomes "refresh whichever proxy the next request reaches".
 
 **Decided for v1: the second — multi-copy, with no global deduplication.** It leaves the hot
 path untouched and pays only in retention precision, and since the handoff no longer resolves
