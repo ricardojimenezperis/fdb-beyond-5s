@@ -107,35 +107,46 @@ latestGrantedRV = effectiveRV;
 transaction.setReadVersion(effectiveRV);
 ```
 
-> **Invariant.** Every read version delivered to a transaction is
-> `max(reply.version, latestGrantedRV)`. Installing a newly granted read version can therefore
-> never lower the client process's active minimum.
+> **Invariant.** Every server-granted read version delivered to a transaction is
+> `max(reply.version, latestGrantedRV)`, within the same `DatabaseContext` and recovery
+> generation. Consequently, installing a newly granted read version cannot lower the client
+> process's active minimum.
 
 In the example both transactions run at 120. A delayed reply of 90 against an existing
 transaction at 100 is raised to at least 100. Inserting a transaction never lowers
 `min(activeReadVersions)`; ending the oldest one only advances it; and `latestGrantedRV`,
 `clientOldestActiveRV` and the published values stay monotone within a generation. No
-`pendingGrvLowerBounds` set is needed and GRV requests need not be serialised.
+`pendingGrvLowerBounds` set is needed, GRV requests need not be serialised, and the population
+is not split by request mode.
 
 **Raising the version does not create a retention hole.** The protection installed by the stale
 reply — a registration at 110, or at a lower `clientFloor` — also covers 120, because a floor at
 a lower version protects every version above it.
 
-Two conditions bound the rule:
+The boundary for sharing the maximum is **`DatabaseContext` + recovery generation + a valid
+lease**, not the mode of the GRV request:
 
-1. **Canonicalise the version number, not the reply.** `GetReadVersionReply` also carries
-   `locked`, `metadataVersion` and `ssVersionVectorDelta` (`GrvProxyInterface.h:33–46`), and
-   those describe the state *at that reply's version*. A transaction raised to 120 must adopt
-   the version-specific fields of the reply that produced 120 — never keep the 110 reply's
-   metadata beside a 120 version. And the raise is only legitimate within the same
-   `DatabaseContext` and generation, between requests of compatible guarantee: a strict
-   transaction must not adopt a version obtained under `FLAG_CAUSAL_READ_RISKY` or
-   `FLAG_USE_PROVISIONAL_PROXIES`, and a request that asked for
-   `FLAG_USE_MIN_KNOWN_COMMITTED_VERSION` (`GrvProxyInterface.h:73–77`) must not be raised to a
-   later version, since a *later* version is not what it asked for. Adopting a
-   strictly-obtained version in a risky transaction is fine — that direction only strengthens.
-2. **The lease contract still applies (§2).** A delayed reply that no longer offers a valid
-   usage window is discarded or re-registered before use, however its version compares.
+1. **Both versions must have been granted by the cluster.** Values supplied through
+   `setVersion()` are excluded — they carry no retention guarantee (§2).
+2. **Same `DatabaseContext`, same recovery generation.** Read versions are never mixed across
+   recoveries; a reply from an earlier generation does not participate in the maximum and is
+   rejected. This is the real constraint behind `FLAG_USE_PROVISIONAL_PROXIES`.
+3. **The delivered version must still be covered by a valid lease window.** A reply arriving
+   outside its window is discarded or re-registered before use, however its version compares.
+
+*Request mode imposes no further restriction.* `FLAG_CAUSAL_READ_RISKY` may return a version
+that lags — raising it to one already granted only uses a fresher snapshot, and a freshness
+guarantee is a lower bound, so any version at or above the one the caller was entitled to
+satisfies it. `FLAG_USE_MIN_KNOWN_COMMITTED_VERSION` selects where the version comes from; it
+is not a ceiling forbidding a later granted version (`GrvProxyInterface.h:73–77`).
+
+**Handle the rest of the reply coherently, but do not transplant it.**
+`GetReadVersionReply` also carries `locked`, `metadataVersion` and `ssVersionVectorDelta`
+(`GrvProxyInterface.h:33–46`). Process them normally into the `DatabaseContext`'s shared state:
+do not naively pair `version = 120` with metadata that only corresponds to processing the 110
+reply, and do not re-apply a delta merely because another reply supplied the maximum —
+`ssVersionVectorDelta` is a delta against shared client state, not a value to copy across
+replies.
 
 **Read-only transactions are covered here and nowhere else.** They never reach a Commit
 Proxy, so this client-side minimum is the only thing protecting their snapshots — which makes
