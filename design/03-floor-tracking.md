@@ -95,6 +95,48 @@ default. A non-temporal replacement remains a possible later change — it is no
 open choices in §8. Without one of the two, register-before-use protects only the instant of
 grant, not the declared lifetime of the transaction.
 
+**Out-of-order GRV replies do not break monotonicity, and need no extra state.** With no active
+transactions and two concurrent GRV requests, replies can arrive 120 then 110; if each
+transaction kept the read version of its own reply, inserting 110 after 120 would pull
+`clientOldestActiveRV` backwards and violate monotone updates within a generation. The library
+therefore canonicalises every granted version:
+
+```cpp
+Version effectiveRV = std::max(reply.version, latestGrantedRV);
+latestGrantedRV = effectiveRV;
+transaction.setReadVersion(effectiveRV);
+```
+
+> **Invariant.** Every read version delivered to a transaction is
+> `max(reply.version, latestGrantedRV)`. Installing a newly granted read version can therefore
+> never lower the client process's active minimum.
+
+In the example both transactions run at 120. A delayed reply of 90 against an existing
+transaction at 100 is raised to at least 100. Inserting a transaction never lowers
+`min(activeReadVersions)`; ending the oldest one only advances it; and `latestGrantedRV`,
+`clientOldestActiveRV` and the published values stay monotone within a generation. No
+`pendingGrvLowerBounds` set is needed and GRV requests need not be serialised.
+
+**Raising the version does not create a retention hole.** The protection installed by the stale
+reply — a registration at 110, or at a lower `clientFloor` — also covers 120, because a floor at
+a lower version protects every version above it.
+
+Two conditions bound the rule:
+
+1. **Canonicalise the version number, not the reply.** `GetReadVersionReply` also carries
+   `locked`, `metadataVersion` and `ssVersionVectorDelta` (`GrvProxyInterface.h:33–46`), and
+   those describe the state *at that reply's version*. A transaction raised to 120 must adopt
+   the version-specific fields of the reply that produced 120 — never keep the 110 reply's
+   metadata beside a 120 version. And the raise is only legitimate within the same
+   `DatabaseContext` and generation, between requests of compatible guarantee: a strict
+   transaction must not adopt a version obtained under `FLAG_CAUSAL_READ_RISKY` or
+   `FLAG_USE_PROVISIONAL_PROXIES`, and a request that asked for
+   `FLAG_USE_MIN_KNOWN_COMMITTED_VERSION` (`GrvProxyInterface.h:73–77`) must not be raised to a
+   later version, since a *later* version is not what it asked for. Adopting a
+   strictly-obtained version in a risky transaction is fine — that direction only strengthens.
+2. **The lease contract still applies (§2).** A delayed reply that no longer offers a valid
+   usage window is discarded or re-registered before use, however its version compares.
+
 **Read-only transactions are covered here and nowhere else.** They never reach a Commit
 Proxy, so this client-side minimum is the only thing protecting their snapshots — which makes
 it indispensable for the *storage* side, the consumer that exists to serve them
