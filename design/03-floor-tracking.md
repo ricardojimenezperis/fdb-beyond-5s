@@ -423,36 +423,41 @@ an executable statement of the invariant.
 
 ### Coordination is the slow path, and most commits avoid it
 
-The reduction is cheap; what is expensive is **linearising a lowered contribution against the
-floor advance**, because that is a network interaction on the commit path. It is needed far
-less often than every commit. Two values must be distinguished:
+The reduction is cheap; what is expensive would be a *separate* network interaction to
+linearise a lowered contribution. There is none: the transition rides the request every batch
+already makes and awaits, so it runs unconditionally. Four values must be distinguished:
 
-- `localMinimum` — the exact minimum of the proxy's deque;
-- `acknowledgedProxyMinimum` — the last contribution whose global installation is confirmed
-  and not yet withdrawn.
+- `proposedBatchMinimum` (`p`) — the minimum `read_snapshot` over what the batcher accepted;
+- `authoritativeEffectiveFloor` (`F`) and `authoritativeInstalledProxyMinimum` (`C`) — both
+  read at the authority;
+- the **exact minimum over the survivors** of the `F` filter, which is what enters the proxy's
+  pending-batch deque and governs future raises. It is not `p`.
 
-A new batch needs coordination only when it **lowers** the installed contribution:
+Only batches that lower the installed contribution mutate the reduction; every batch pays the
+cheap check:
 
 ```
 p = proposedBatchMinimum          // min read_snapshot over the transactions in the batch
 F = authoritativeEffectiveFloor   // max(publishedGlobalValidationDemand, currentVersion − W_commit)
 
 C = authoritativeInstalledProxyMinimum(source)   // read at the authority, not sent by the proxy
-
-if (p >= acknowledgedProxyMinimum)   skip the exchange; the installed contribution covers p
-else                                 installedProxyMinimum = min(C, max(p, F))   // never raises
+I = min(C, max(p, F))                            // computed on every batch; an install never raises
+if (I < C) install(source, I)
 
 reply carries F and installedProxyMinimum;
 afterwards the proxy rejects individually every transaction with read_snapshot < F
 ```
 
-If `p ≥ acknowledgedProxyMinimum`, the already-installed contribution is at least as
-conservative, so **the demand-derived component of the floor cannot have passed `p`**; the
-commit is admitted with no round trip at all. Since read versions cluster near `now` in normal
-operation, this is the common case.
+**Every batch runs the transition; there is no local fast path.** A proxy's copy of the
+installed minimum can be stale in the one direction that matters: if it holds 100 while the
+authority has already installed a raise to 200, a batch with `p = 150` would look covered and
+skip the proposal, when the installed contribution does not cover it. Sequence numbers discard
+late acknowledgements but do not close that interval, and keeping the optimisation would mean
+revoking the local capability before every raise. Since the request is made and awaited on
+every batch anyway, running the transition unconditionally costs no round trip.
 
-Otherwise the authority installs `min(C, max(p, F))` **in the same transition and returns both
-`F` and what it installed** — there is no retry, and no install ever raises a contribution. A proposal contaminated by a single transaction too old is refused as an *exact*
+The authority installs `min(C, max(p, F))` **in the same transition and returns both `F` and
+what it installed** — no retry, and no install ever raises a contribution. A proposal contaminated by a single transaction too old is refused as an *exact*
 minimum while the survivors still receive conservative coverage, and the proxy, having been
 told `F`, rejects the stragglers individually. **This is not the silent substitution forbidden
 on the client path** (§7a): there, accepting a reported floor under a newer value without
@@ -460,14 +465,14 @@ saying so remains illegal, precisely because the client would believe a snapshot
 is not.
 
 **That guarantee covers only the demand-derived component.** The `currentVersion − W_commit`
-term can still overtake `p` while the batch travels — with `acknowledgedProxyMinimum = 100`,
+term can still overtake `p` while the batch travels — with `C = 100`,
 `p = 120` and `currentVersion − W_commit = 130`, the resolver floor is 130 even though the
 proxy holds a contribution at 100. That is today's behaviour preserved: a transaction can
 become too old in transit, and the resolver keeps the final decision.
 
-Symmetrically, when the deque advances to a **higher** minimum, publication may be deferred:
-`acknowledgedProxyMinimum < localMinimum` only over-retains, and it keeps later batches
-covered by the older, lower value without coordination.
+Symmetrically, when the deque advances to a **higher** minimum, publication may be deferred: a
+contribution lower than the exact survivor minimum only over-retains, and it keeps later
+batches covered by the older, lower value.
 
 **The installation must be conditional, not a send.** Between the proxy's `effectiveFloor`
 test and the arrival of its update, the global floor can advance — so the aggregator applies a
@@ -610,8 +615,10 @@ InstallReply conditionalInstallProxyMinimum(
 }
 ```
 
-`C` is read from the authority's own state. The proxy's `acknowledgedProxyMinimum` is a local
-copy, good for skipping the exchange entirely, never authoritative about what is installed.
+`C` is read from the authority's own state. A proxy-side copy of it is diagnostic only: it
+cannot decide whether the exchange is needed, because between an authority-side raise and its
+acknowledgement the copy is stale in exactly the direction that would skip a necessary
+proposal.
 
 **The comparison is against the effective floor, not against the demand minimum alone.** The
 resolver's floor is `max(demand, currentVersion − W_commit)`, so testing only the demand
@@ -719,7 +726,7 @@ authorized party consumes it to decide.)
   never admitted wholesale under a floor that passed it, never failed wholesale either, and
   never has its earlier coverage raised away;
 - a late acknowledgement of a *raised* contribution arrives after a lower one was installed —
-  it must be discarded, not allowed to overwrite `acknowledgedProxyMinimum`;
+  it must be discarded, not allowed to overwrite a value installed since;
 - a batch retires while its entry is no longer in the deque (it left through `pop_back`), and
   the minimum must not change;
 - retirement order is violated — an assertion that must never fire.
@@ -1033,10 +1040,12 @@ the batch, so no per-commit collection is added, and the amortised cost of both 
 the retire path is O(1).
 
 The measurable cost is not the reduction but the **coordination rate**: the fraction of
-batches whose minimum falls below `acknowledgedProxyMinimum` and therefore pay a network
-linearisation on the commit path (§4a). That fraction, its added latency, and the gap
-`localMinimum − acknowledgedProxyMinimum` (which prices deferred publication as
-over-retention) are the numbers that decide whether this design is affordable.
+batches that actually **lower** the installed contribution — `I < C` — and therefore mutate the
+reduction. The round trip and its linearisation exist for every batch already, so what is
+incremental is carrying `p`, reading `C`, computing `F` and `I`, and writing only in that
+fraction. That fraction, the duration added to the authority's non-suspending stretch, and the
+gap between the installed contribution and the exact survivor minimum (which prices deferred
+raises as over-retention) are the numbers that decide whether this design is affordable.
 
 Two observations that bound this:
 

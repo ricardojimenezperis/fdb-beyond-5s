@@ -232,46 +232,57 @@ executable invariant that will fire if upstream ever relaxes the ordering.
 > (`ServerKnobs.cpp:855`) and `RESET_MASTER_BATCHES` / `RESET_RESOLVER_BATCHES` are diagnostics,
 > not limits.
 
-### 4.2a One transition: propose, install, and learn the rejection threshold
+### 4.2a One authoritative transition per batch
 
-The reduction is cheap. What is expensive is **linearising a lowered contribution against the
-floor advance**, because that is a network interaction on the commit path. Three quantities,
-named apart because conflating them is what produced two incompatible algorithms in earlier
-drafts:
+Every batch already sends and awaits `GetCommitVersionRequest`, so carrying `p` on it and
+running the transition **every time** costs no round trip and no scheduling dependency. v1
+therefore has **no local fast path**: the proxy does not decide whether coordination is needed,
+because it cannot know.
 
-- `proposedBatchMinimum` (`p`) — the minimum `read_snapshot` over the transactions that
-  actually entered the batch, accumulated in `commitBatcher` after its own limits. It is a
-  *proposal*: it precedes any authoritative filtering.
+Four quantities, named apart because conflating them produced two incompatible algorithms in
+earlier drafts:
+
+- `proposedBatchMinimum` (`p`) — the minimum `read_snapshot` over the transactions the batcher
+  accepted into the batch, accumulated in `commitBatcher`. A *proposal*: it precedes any
+  authoritative filtering, and it is what drives the transition.
 - `authoritativeEffectiveFloor` (`F`) — `max(publishedGlobalValidationDemand,
   authoritativeCurrentVersion − W_commit)`, known only at the authority.
-- `installedProxyMinimum` — what the authority actually installed: `p` exactly when `p ≥ F`,
-  and `F` conservatively when `p < F`.
-
-**Four quantities, and the install never raises.** A fourth is needed beside the three above:
-
-- `authoritativeInstalledProxyMinimum` (`C`) — what this source currently has installed,
-  **read from the authority's own state**. `acknowledgedProxyMinimum` is the proxy's local copy
-  of it, useful to skip the exchange, never the authority on its value.
+- `authoritativeInstalledProxyMinimum` (`C`) — what this source currently has installed, read
+  from the authority's own state.
+- `installedProxyMinimum` (`I`) — `min(C, max(p, F))`, which is `C` unchanged whenever that
+  expression does not lower it.
 
 ```cpp
-// inside the sequencer's atomic stretch
+// inside the sequencer's atomic stretch, on every batch
+F = authoritativeEffectiveFloor();
 C = authoritativeInstalledProxyMinimum(source);   // empty-source value if absent
 I = min(C, max(p, F));
-if (I < C) installProxyMinimum(source, I);        // never raises here
+if (I < C) install(source, I);                    // an install never raises
 
-reply.authoritativeEffectiveFloor = F;
-reply.installedProxyMinimum       = I;
+reply(F, I, publicationSequence);
 ```
 
 and **after the reply** the proxy rejects individually every transaction with
-`read_snapshot < F`.
+`read_snapshot < F`, admitting the survivors, which `I` already covers.
+
+**Why there is no local fast path.** A proxy's `acknowledgedProxyMinimum` is a copy that can be
+stale in the one direction that matters. Suppose proxy and authority both hold 100; the proxy
+retires batches and asks to raise to 200; the authority installs 200 and the acknowledgement is
+still in flight when a batch arrives with `p = 150`. Reading its own copy the proxy sees
+`150 ≥ 100` and skips the proposal — while the contribution actually installed is 200, which
+does not cover 150. Sequence numbers discard *late* acknowledgements; they do not close that
+interval. Keeping the optimisation would mean invalidating the local capability before every
+raise and coordinating admissions until a new token arrives: a great deal of protocol to save
+some fields and a comparison inside an RPC that happens regardless. `acknowledgedProxyMinimum`
+therefore survives only as diagnostics, and possibly as a later optimisation once its
+revocation is specified.
 
 **Why `min(C, …)` is load-bearing.** Without it, `C = 100` still covering an earlier pending
 batch, a contaminated `p = 50` and an advanced `F = 150` would install 150 — raising the
-contribution and dropping the earlier batch's coverage while it is still in flight. Raises
-belong to retirement (§4.2), never to an install.
+contribution and stranding the earlier batch. Raises belong to retirement (§4.2), never to an
+install.
 
-**The four cases, mutually exclusive:**
+**The cases, mutually exclusive:**
 
 | Condition | Installed `I` |
 |---|---|
@@ -291,32 +302,28 @@ coverage for whatever survives, and the reply states the rejection threshold exp
 told `F` and rejects each commit that fell outside it. On the *client* path, raising a reported
 floor silently remains illegal.
 
+**Two minima, not one.** `p` drives the transition and is taken over what the batcher accepted.
+The *exact* minimum over the survivors of the `F` filter is a different value: it is what enters
+the pending-batch deque (§4.2) and what determines future **raises** on retirement. Using `p`
+for the deque would keep the contribution lower than necessary; using the survivor minimum for
+the transition would require filtering before `F` is known, which the sequence does not permit.
+
 **The guarantee covers only the demand-derived component.** `currentVersion − W_commit` can
-still overtake `p` in transit: with `acknowledgedProxyMinimum = 100`, `p = 120` and
-`currentVersion − W_commit = 130`, the resolver's floor is 130 even though the proxy holds a
-contribution at 100. That is today's behaviour preserved — a transaction can become too old
-while travelling — and it is why the resolver stays authoritative (§4.2b).
+still overtake a batch in transit: with `C = 100`, `p = 120` and `currentVersion − W_commit =
+130`, the resolver's floor is 130 even though the proxy holds a contribution at 100. That is
+today's behaviour preserved — a transaction can become too old while travelling — and it is why
+the resolver stays authoritative (§4.2b).
 
-When the deque advances to a **higher** minimum, publication may be deferred:
-`acknowledgedProxyMinimum < localMinimum` only over-retains, and it keeps later batches covered
-without coordination.
+When the deque advances to a **higher** minimum, publication may be deferred: a contribution
+lower than necessary only over-retains.
 
-**The install is a compare-and-set, not a send**, and it compares against the effective floor
-rather than the demand minimum alone: testing only the demand component would admit batches the
-age bound has already overtaken, which then travel to the resolver just to be rejected. Winning
-the install means admissible *at that instant*. Without this the proxy's own test is a
-time-of-check/time-of-use gap and a batch can be admitted under a floor that has already passed
-it.
-
-**The cost of the common path** is no additional round trip, no additional traversal and no
-scheduling dependency — the fields ride a request the proxy already sends and awaits, and `p`
-is already accumulated. What it does add is a small amount of computation at the authority,
-which is exactly what the dark step (§18 step 5) exists to measure.
+**What this costs.** The round trip and its linearisation exist for every batch already. The
+increment is: carrying `p` on the request, reading `C` and computing `F` and `I` at the
+authority, and updating the reduction **only when `I < C`** — every batch pays the cheap check,
+few mutate anything. Measuring that increment is what the dark step (§18 step 5) is for.
 
 **Acknowledgements carry `{proxyGeneration, publicationSequence, coveredThroughBatch}`, and
-stale ones are discarded**, so a late acknowledgement of a *raise* cannot overwrite a lower
-minimum installed since. The fast path reads the minimum known to be still installed globally,
-never merely the last one sent.
+stale ones are discarded**, so a late acknowledgement cannot overwrite a value installed since.
 
 ### 4.2b The proxy's pre-filter is conservative; the resolver stays authoritative
 
@@ -698,9 +705,9 @@ renewals lost or acknowledged after the client's deadline   // must be visible, 
 size distribution of the monotonic deque
 batchContributionLifetime = floorRetirementTime − batchFloorAdmissionTime
 loweringInstallLifetime   = floorRetirementTime − conditionalInstallAckTime
-fraction of batches with b < acknowledgedProxyMinimum        // who pays the slow path
-number and latency of network linearisations
-localMinimum − acknowledgedProxyMinimum                     // deferred-publication over-retention
+fraction of batches that lower the installed minimum         // I < C: who mutates the reduction
+duration added to the authority's non-suspending stretch
+installedProxyMinimum − exactSurvivorMinimum                 // deferred-raise over-retention
 GRV registrations taking the slow path                      // candidateMinimum < acknowledgedSourceMinimum
 new lease copies per client under multi-copy                // each can force a slow path
 proxy pre-rejections, and resolver rejections after passing the filter
@@ -933,14 +940,15 @@ because `F` is known only at the authority and arrives in the reply. So:
 
 1. **accumulates `p`** as transactions enter the batch (`commitBatcher`), over those admitted
    into it rather than over requests it rejected there;
-2. **skips the exchange** if `p ≥ acknowledgedProxyMinimum` — its local copy says the installed
-   contribution already covers the batch (§4.2a);
-3. otherwise **sends `p` as a proposal** on the request it already makes;
-4. the authority, in one non-suspending transition, computes `F`, reads `C` from its own state,
+2. **sends `p` as a proposal** on the request it already makes — always, since a local copy of
+   the installed minimum can be stale in the direction that matters (§4.2a);
+3. the authority, in one non-suspending transition, computes `F`, reads `C` from its own state,
    installs `I = min(C, max(p, F))` when `I < C`, and **replies with `F` and `I`**;
-5. on the reply the proxy **rejects individually** every transaction with `read_snapshot < F`,
+4. on the reply the proxy **rejects individually** every transaction with `read_snapshot < F`,
    and admits the survivors, which `I` already covers; the batch is never failed wholesale, and
    nothing is retried;
+5. records the **exact minimum over the survivors** in its pending-batch deque — a different
+   value from `p`, and the one that governs future raises;
 6. **withdraws** the batch's contribution once the batch reaches a terminal state — the only
    place a contribution rises.
 
@@ -1200,7 +1208,7 @@ Handoff boundary (§10):
   never admitted wholesale under a floor that passed it, never failed wholesale either, and
   never has its earlier coverage raised away;
 * a late acknowledgement of a raised contribution arrives after a lower one was installed —
-  discarded, never overwriting `acknowledgedProxyMinimum`;
+  discarded, never overwriting a value installed since;
 * a batch retires whose entry already left the deque through `pop_back` — the minimum must
   not change;
 * the FIFO retirement assertion — a test that must never fire;
@@ -1391,7 +1399,8 @@ behaviour-neutral, which is what lets a reviewer accept one without accepting th
    conservative pre-filter (§4.2b).
 8. **The linearization** between commit admission, incorporation of the proxy's contribution,
    and floor advance (§10) — the conditional install, the acknowledgement tagging, and the
-   fast path that skips it entirely when `b ≥ acknowledgedProxyMinimum` (§4.2a).
+   transition run on every batch, since no local copy can decide safely whether it is needed
+   (§4.2a).
 9. **Generation barriers** for GRV-proxy and Commit-Proxy death (§10, §12).
 10. **Mixed-version negotiation, kill switch, staleness fallback** (§13, §15).
 11. **Simulation tests**: lifecycle, failures, recovery, adversarial input, compatibility (§16).
