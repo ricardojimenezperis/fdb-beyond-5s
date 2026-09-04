@@ -277,6 +277,35 @@ some fields and a comparison inside an RPC that happens regardless. `acknowledge
 therefore survives only as diagnostics, and possibly as a later optimisation once its
 revocation is specified.
 
+**A stale *raise* is unsafe, and needs its own guard.** Lowerings are harmless when late — they
+only over-retain — but a raise computed against an older state can strip coverage from work
+admitted since. With `C = 100`, the proxy computes a raise to 200 and sends it; before it is
+processed the authority admits a batch with `p = 150`, covered by `C = 100`; the stale raise
+then installs 200 and leaves that batch uncovered. Discarding a late acknowledgement at the
+proxy does not help: the *authority* must refuse to apply it.
+
+A per-source revision closes it, advanced by **every** admission transition — including those
+where `I == C` and nothing was written, since those are exactly the ones that create newly
+covered work:
+
+```cpp
+// admission, on every batch
+read C, F, sourceRevision;
+I = min(C, max(p, F));
+if (I < C) install(source, I);
+++sourceRevision;                       // always, even when I == C
+reply { F, I, sourceRevision };
+
+// raise, on retirement
+propose { exactPendingMinimum, expectedSourceRevision };
+apply only if expectedSourceRevision == sourceRevision;   // else refused
+```
+
+A refused raise is recomputed from the deque and resent; the contribution stays low in the
+meantime, which only over-retains. This is the symmetric counterpart of running admission
+unconditionally: no admission relies on a stale local capability, and no retirement can raise
+the contribution above work admitted after it was computed.
+
 **Why `min(C, …)` is load-bearing.** Without it, `C = 100` still covering an earlier pending
 batch, a contaminated `p = 50` and an advanced `F = 150` would install 150 — raising the
 contribution and stranding the earlier batch. Raises belong to retirement (§4.2), never to an
@@ -591,8 +620,8 @@ explicitly rather than assumed from "the master is the generation":
    acknowledge the publication before the sequencer treats the advance as authorised.
 
 **A lowering install is a *proposal*, and its rejection must not fail the batch** — §4.2a gives
-the single transition that achieves both: the authority installs `max(proposedBatchMinimum,
-authoritativeEffectiveFloor)` and returns the threshold, so a proposal contaminated by one
+the single transition that achieves both: the authority installs `min(C, max(proposedBatchMinimum,
+authoritativeEffectiveFloor))` and returns the threshold, so a proposal contaminated by one
 transaction too old still leaves the survivors covered, without a second round trip and without
 failing the batch.
 
@@ -707,7 +736,8 @@ batchContributionLifetime = floorRetirementTime − batchFloorAdmissionTime
 loweringInstallLifetime   = floorRetirementTime − conditionalInstallAckTime
 fraction of batches that lower the installed minimum         // I < C: who mutates the reduction
 duration added to the authority's non-suspending stretch
-installedProxyMinimum − exactSurvivorMinimum                 // deferred-raise over-retention
+exactSurvivorMinimum − installedProxyMinimum                 // deferred-raise over-retention
+raises refused by the revision CAS                           // recomputed and resent
 GRV registrations taking the slow path                      // candidateMinimum < acknowledgedSourceMinimum
 new lease copies per client under multi-copy                // each can force a slow path
 proxy pre-rejections, and resolver rejections after passing the filter
@@ -822,10 +852,10 @@ installing atomically and **replying only after the acknowledgement**.
 > **`authoritativeStorageAdmissionFloor`**: the greatest reclamation floor already made
 > irreversible or authorised to any Storage Server.
 >
-> | Install | Wins only if |
-> |---|---|
-> | `conditionalInstallClientMinimum` | `requiredReadVersion ≥ authoritativeStorageAdmissionFloor`, with the contribution installed in the same transition, before that authorisation can advance |
-> | `conditionalInstallProxyMinimum` | `requiredReadVersion ≥ authoritativeResolverEffectiveFloor = max(demand, authoritativeCurrentVersion − W_commit)` |
+> | Install | Guarded against | Outcome |
+> |---|---|---|
+> | `conditionalInstallClientMinimum` | `authoritativeStorageAdmissionFloor` | wins only if `requiredReadVersion ≥` it — a client's registration is refused outright when reclamation has already been authorised past that version, and the refusal is visible (§7a/§11) |
+> | `conditionalInstallProxyMinimum` | `authoritativeResolverEffectiveFloor = max(globalValidationDemand, authoritativeCurrentVersion − W_commit)` | never fails: it returns `{F, I}` with `I = min(C, max(p, F))`. The *exact* proposal is taken only when `p ≥ F`; below it, conservative coverage is installed and the proxy rejects individually |
 >
 > Physical `minimumRetainedVersion` stays useful for best-effort `setVersion()` and diagnostics
 > — never as authority to grant a guarantee. *Reopening the demand floor when every Storage

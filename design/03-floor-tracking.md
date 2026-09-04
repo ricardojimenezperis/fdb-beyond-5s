@@ -261,10 +261,10 @@ machinery with `conditionalInstallProxyMinimum`; what it may not be is eventual 
 > already. The authority is therefore **`authoritativeStorageAdmissionFloor`** — the greatest
 > reclamation floor already made irreversible or authorised/published to any Storage Server:
 >
-> | Install | Wins only if |
-> |---|---|
-> | `conditionalInstallClientMinimum` | `requiredReadVersion ≥ authoritativeStorageAdmissionFloor`, installing the contribution in the same transition, before that authorisation can advance |
-> | `conditionalInstallProxyMinimum` | `requiredReadVersion ≥ authoritativeResolverEffectiveFloor = max(globalValidationDemand, authoritativeCurrentVersion − W_commit)` |
+> | Install | Guarded against | Outcome |
+> |---|---|---|
+> | `conditionalInstallClientMinimum` | `authoritativeStorageAdmissionFloor` | wins only if `requiredReadVersion ≥` it — a client's registration is refused outright when reclamation has already been authorised past that version, and the refusal is visible (§7a/§11) |
+> | `conditionalInstallProxyMinimum` | `authoritativeResolverEffectiveFloor = max(globalValidationDemand, authoritativeCurrentVersion − W_commit)` | never fails: it returns `{F, I}` with `I = min(C, max(p, F))`. The *exact* proposal is taken only when `p ≥ F`; below it, conservative coverage is installed and the proxy rejects individually |
 >
 > Physical `minimumRetainedVersion` (`02-storage.md`) remains useful for best-effort
 > `setVersion()` and for diagnostics; it is not authority to grant a new guarantee.
@@ -421,7 +421,7 @@ an executable statement of the invariant.
 > size it against (`COMMIT_BATCHES_MEM_BYTES_HARD_LIMIT` is a byte budget, `ServerKnobs.cpp:855`;
 > `RESET_MASTER_BATCHES` and `RESET_RESOLVER_BATCHES` are diagnostics, not limits).
 
-### Coordination is the slow path, and most commits avoid it
+### One authoritative transition per batch
 
 The reduction is cheap; what is expensive would be a *separate* network interaction to
 linearise a lowered contribution. There is none: the transition rides the request every batch
@@ -492,8 +492,12 @@ floor that has already passed it.
 
 **Acknowledgements carry `{proxyGeneration, publicationSequence, coveredThroughBatch}` and
 stale ones are discarded**, so that a late acknowledgement of a *raise* cannot overwrite a
-lower minimum installed since. The value the fast path reads is the minimum known to still be
-installed globally — not simply the last one sent.
+lower minimum installed since. And a *raise* is guarded at the authority by a per-source
+revision that every admission advances — including admissions where nothing was written, since
+those are precisely the ones that create newly covered work. A raise carries the revision it
+was computed against and applies only if that revision is still current; refused, it is
+recomputed from the deque and resent. A late lowering merely over-retains; a late raise would
+strip coverage from work admitted since, which is why only raises need the compare.
 
 ### The proxy's pre-filter is conservative; the Resolver stays authoritative
 
@@ -1069,8 +1073,9 @@ Two observations that bound this:
   `batchOldestReadSnapshot` accumulates there at no extra traversal and is ready before
   `commitBatch` begins — well before `GetCommitVersionRequest` is built and awaited
   (`:901–907`, awaited immediately rather than overlapped). That minimum is taken over
-  *arrived* rather than *admitted* transactions, which can only make it lower, hence more
-  conservative.
+  the transactions the **batcher accepted**, before any authoritative filtering — not over the
+  survivors of that filter, which is a different and higher value, computed after the reply and
+  used for the deque and for future raises.
 
 This cost may exceed the lease map's and deserves its own benchmark.
 
