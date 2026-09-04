@@ -183,19 +183,33 @@ and read" newly attractive.
 
 ## 3. Transport: piggyback on GetReadVersion, lease when idle
 
-The normal path adds **zero messages**: every `GetReadVersion` carries
-`{clientID, clientFloor, leaseGeneration}`. **Mechanically confirmed** — `GetReadVersionRequest`
-is flatbuffers-serialized (`GrvProxyInterface.h:126–141`), and FDB has an established idiom
-for exactly this: fields appended to `serializer(...)` **gated on the negotiated protocol
-version**, e.g. `if (ar.protocolVersion().hasNativeCdc())` in `ClientDBInfo::serialize`
-(`fdbclient/include/fdbclient/CommitProxyInterface.h:151–153`) and
-`hasMutationChecksum()` in `CommitTransaction.h:351`. **Gating is required, not optional:**
-"old servers ignore trailing bytes, old clients send none" is too automatic — a *new* server
-receiving the old encoding must still distinguish absence from a zero floor. The fields are therefore
-enabled only when the negotiated protocol version advertises support; legacy requests
-deserialize without them and legacy servers never receive the extended encoding. Mixed-version
-simulation must cover the compatibility behaviour — which dovetails with the negotiation gate
-of §6.
+The normal path adds **zero messages**: every `GetReadVersion` carries the client's
+registration. `GetReadVersionRequest` is flatbuffers-serialized
+(`GrvProxyInterface.h:126–141`), which decides how that is encoded:
+
+> **Structural compatibility is not the same problem as semantic activation.** FlatBuffers
+> carries the schema, so an added field needs no protocol gate; what it needs is to be an
+> `Optional`, because a field an older sender omitted is deserialized as its **wire default**
+> and not as the member's initializer. A sentinel value therefore cannot represent absence.
+> Cluster-wide negotiation gates the *behaviour* — whether the floor may be demand-driven at
+> all (§6) — never the physical presence of the field.
+
+So the registration travels as a single optional unit rather than three loose fields:
+
+```cpp
+Optional<ClientFloorReport> clientFloor;
+struct ClientFloorReport {
+    ClientID clientID;
+    Version  clientOldestActiveRV;
+    Generation leaseGeneration;
+};
+```
+
+Wrapping the whole unit is deliberate: separate `Optional`s would admit a floor without the
+generation that fences it. *This was learned the hard way — the first implementation of the
+resolver's carried floor used a sentinel and split its `serializer(...)` call to imitate a
+gate, which left the entire table unpopulated. Mixed-version behaviour must still be covered
+by tests in both directions.*
 
 Explicit traffic appears in exactly one case: a client holding a long-lived read version while
 no longer requesting new ones sends a periodic `RenewOldestReadVersion`. The new traffic is
@@ -689,7 +703,7 @@ selected and covered by these cases before Resolver Phase A ships.**
 ## 5. Aggregation hierarchy
 
 A hierarchical `min` reduction: client library → GRV proxy (over valid leases) → Cluster
-Controller → `globalOldestClientRV` → broadcast → derived floors (§6).
+Controller → `globalOldestClientRV` → consumer-scoped publication → derived floors (§6).
 
 The property is **not** that no component tracks transactions individually — once §4a exists,
 Commit Proxies track a minimum over their pending batches. It is that *the hierarchy
@@ -730,10 +744,11 @@ because GRV requests are **load-balanced across all GRV proxies today** —
   a stale copy is an older value and the global `min` is conservative (§7). The costs are
   that "no deduplication" is false (up to `numProxies` entries per client) and that the floor
   advances only as fast as the *least recently refreshed* copy, which for an idle client can
-  lag a full lease period. The dedicated `RenewOldestReadVersion` path (§3) can target the
-  stable proxy, but stale copies on other proxies must then be **explicitly refreshed or
-  allowed to expire** — they cannot be assumed to catch up on their own. Safety is
-  conservative either way; precision is bounded by the oldest surviving copy.
+  lag a full lease period. **In v1 a renewal refreshes the copies the client knows it holds,
+  and any others are left to expire**: renewing one copy does not update the rest, and they
+  cannot be assumed to catch up on their own. Directing `RenewOldestReadVersion` (§3) at a
+  single designated copy is a possible optimization, not the v1 rule. Safety is conservative
+  either way; precision is bounded by the oldest surviving copy.
 
 **Decided for v1: the second — multi-copy, with no global deduplication.** It leaves the hot
 path untouched and pays only in retention precision, and since the handoff no longer resolves
@@ -905,7 +920,8 @@ Two remain open — the lease parameters (1) and where the conditional-install a
    **They may share transport and machinery, never guards** (§3, §4a). Candidates for either: a
    generation-fenced operation in the floor protocol, or the source awaiting confirmation
    before proceeding — the GRV proxy before replying, the Commit Proxy before admitting the
-   batch. May be subsumed into the watermark transport choice (2).
+   batch. It may reuse the machinery selected for consumer-scoped publication (2), provided
+   the comparison and the installation stay atomically ordered at the authority.
 
    **Neither is entangled with lease identity.** Because admission is decided against a floor
    rather than against a specific registration (§4a), the handoff does not need to locate a

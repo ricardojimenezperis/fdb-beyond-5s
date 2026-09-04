@@ -483,8 +483,10 @@ load-balanced (`NativeAPI.cpp:5300`). Both cannot hold.
   correct: floors are monotone, so a stale copy is an older value and the global `min` is
   conservative. Costs: up to `numProxies` entries per client, and the floor advances only as
   fast as the *least recently refreshed* copy — for an idle client, a full lease period. A
-  dedicated `RenewOldestReadVersion` can target the stable proxy, but stale copies elsewhere
-  must be **explicitly refreshed or allowed to expire**; they do not catch up on their own.
+  **in v1 a renewal refreshes the copies the client knows it holds, and any others are left to
+  expire** — renewing one copy does not update the rest, and they do not catch up on their own.
+  Aiming `RenewOldestReadVersion` at a single designated copy is a possible optimization, not
+  the v1 rule.
 
 **Decided for v1: multi-copy, with no global deduplication.** It leaves the GRV hot path
 untouched and pays only in retention precision. **Under the floor-based conditional-install
