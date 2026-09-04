@@ -318,7 +318,7 @@ sealed epoch may be much smaller than half. T3.1 remains the only thing that can
 **retreating** floor schedule, which the monotone contract forbids; the second fixed the schedule
 but had a **broken control arm** — with the fix disabled it still swept every batch, so it was not
 reproducing today's gated behaviour at all. What follows uses a monotone floor and a control that
-reproduces `ConflictSet.cpp:1016` faithfully.*
+reproduces `ConflictSet.cpp:986` faithfully.*
 
 ### Setup
 
@@ -341,7 +341,7 @@ demonstrate unbounded growth, and the plateau is itself bounded in version dista
 budget across the run against 3.38 M for the other — it simply never ran.
 
 The mechanism is the one predicted: during a plateau `newOldestVersion == cs->oldestVersion`, so
-the `>` test at `ConflictSet.cpp:1016` is false. **Equality, not "below"** — the earlier write-up
+the `>` test at `ConflictSet.cpp:986` is false. **Equality, not "below"** — the earlier write-up
 named the wrong condition.
 
 ### Result 2 — draining is impractical once writes stop
