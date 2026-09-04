@@ -1,14 +1,12 @@
 # Floor Tracking — the Oldest Active Read Version
 
-*Version: **2.0** · supersedes 1.0 — this file's initial commit.*
 *Status: design frozen at the protocol level, reviewed against `apple/foundationdb` main @
-`a443d3ee60`. **Four** implementation choices remain deliberately open (§8); the one
-correctness gap found in 1.0 — the commit lifecycle handoff — is closed as a **rule** in §4a,
-with its linearization mechanism left to §8.4. It was blocking Resolver Phase A
-(`01-resolver.md` §3). Claims about current FDB carry `file:line`. Changes are listed in
-§10.*
+`a443d3ee60`. **Four** implementation choices remain deliberately open (§8). The commit
+lifecycle handoff — the one correctness gap in this protocol, and what was blocking Resolver
+Phase A (`01-resolver.md` §3) — is closed as a **rule** in §4a, with its linearization
+mechanism left to §8.4. Claims about current FDB carry `file:line`.*
 
-## 1. Why this protocol must exist *(revised — see §10 F34)*
+## 1. Why this protocol must exist
 
 Every retention decision begins with one client-side observation:
 
@@ -20,9 +18,9 @@ commits whose client-side lifetime may already have ended —
 
 `globalValidationDemand = min(globalOldestClientRV, oldestInFlightCommitRV)`
 
-— and the handoff guarantees continuous coverage between the two sources. 1.0's framing
-("every retention decision consumes one number") predates the server-side pin and is no longer
-literally true.
+— and the handoff guarantees continuous coverage between the two sources. **Retention is
+therefore not one number but two derivations from a common reduction:** storage consumes the
+client observation; the resolver additionally consumes the server-side pin.
 
 Today's FoundationDB does not produce the client-side observation either. **Verified:** `GrvProxyData`
 (`fdbserver/grvproxy/GrvProxyServer.cpp:187–211`) keeps no per-client state of any kind, and
@@ -31,7 +29,7 @@ client identity — only `transactionCount`, flags, priority, tags and `maxVersi
 server-side observes a transaction's lifetime. **The only place that knows it is the client
 library.**
 
-## 2. Client side: a monotonic minimum *(unchanged, with one hole named)*
+## 2. Client side: a monotonic minimum
 
 - `clientFloor = min(activeRVs)` — while transactions are active
 - `clientFloor = max(clientFloor, latestGrantedRV)` — when `activeRVs` is empty
@@ -41,13 +39,13 @@ Monotonicity is load-bearing: when the oldest transaction ends the floor advance
 version is irrevocably abandoned by this client. Published values may lag
 (`reportedMin ≤ localMin`); lag only over-retains, never under-retains.
 
-**New in 2.0 — manually set read versions bypass the sensor.** `Transaction::setVersion(v)`
+Manually set read versions bypass the sensor.** `Transaction::setVersion(v)`
 (`fdbclient/NativeAPI.cpp:3594–3603`) validates only `v > 0` and that no read version is
 already set; it contacts no proxy and records
 `trState->readVersionObtainedFromGrvProxy = false` (`:3602`). Such a transaction is invisible
-to the aggregation of §5. 1.0's rule `set_read_version(v)` requires `v ≥ clientFloor` bounds
-this **within one client process**, but a freshly constructed `DatabaseContext` starts at
-`clientFloor = 0`. Two resolutions were admissible:
+to the aggregation of §5. Requiring `v ≥ clientFloor` bounds this **only within one client
+process**, and a freshly constructed `DatabaseContext` starts at `clientFloor = 0`, so the
+rule cannot be made global. Two resolutions are admissible:
 
 - **(a) Register on set** — treat `setVersion` as a registration point, which makes the rule
   enforceable but adds a round trip to a path that has none today; or
@@ -74,9 +72,9 @@ is flatbuffers-serialized (`GrvProxyInterface.h:126–141`), and FDB has an esta
 for exactly this: fields appended to `serializer(...)` **gated on the negotiated protocol
 version**, e.g. `if (ar.protocolVersion().hasNativeCdc())` in `ClientDBInfo::serialize`
 (`fdbclient/include/fdbclient/CommitProxyInterface.h:151–153`) and
-`hasMutationChecksum()` in `CommitTransaction.h:351`. **Corrected in review:** "old servers
-ignore trailing bytes, old clients send none" is too automatic — a *new* server receiving the
-old encoding must still distinguish absence from a zero floor. The fields are therefore
+`hasMutationChecksum()` in `CommitTransaction.h:351`. **Gating is required, not optional:**
+"old servers ignore trailing bytes, old clients send none" is too automatic — a *new* server
+receiving the old encoding must still distinguish absence from a zero floor. The fields are therefore
 enabled only when the negotiated protocol version advertises support; legacy requests
 deserialize without them and legacy servers never receive the extended encoding. Mixed-version
 simulation must cover the compatibility behaviour — which dovetails with the negotiation gate
@@ -92,21 +90,20 @@ instant the library receives it. **This is register-before-use, and Resolver Pha
 on it** (`01-resolver.md` §3): it is what makes an empty population safe to reclaim
 against (§5).
 
-## 4. Leases, not unregistration *(unchanged)*
+## 4. Leases, not unregistration
 
 `commit/cancel/destructor → unregister` fails on the one case that matters: a crashed client
 sends nothing. Each GRV proxy keeps, per client process, `{minRV, leaseExpiration}`; an
 expired lease removes the client and recomputes the proxy minimum. A dead client over-retains
 for one lease timeout. Correctness never depends on promptly detecting death.
 
-> **Caution inherited from 1.0.** The phrase "`commit` → unregister" above describes the
-> *rejected* design. It must not be read as licensing release of the registration at commit
+> **Caution.** The phrase "`commit` → unregister" above describes the *rejected* design. It must not be read as licensing release of the registration at commit
 > **submission** — see §4a.
 
-## 4a. Commit lifecycle handoff — NEW, and the gap that blocked Phase A
+## 4a. Commit lifecycle handoff — the gap that blocked Phase A
 
-1.0 defined liveness as "transactions still alive" without fixing the boundary at commit
-submission. That leaves a race:
+Defining liveness as "transactions still alive" without fixing the boundary at commit
+submission leaves a race:
 
 > A client submits a commit with read version `r`, then the transaction ends client-side (or
 > the process dies and its lease expires). `clientFloor` advances past `r`, the watermark
@@ -124,9 +121,8 @@ admission at `now − W_commit` while retention follows the dynamic floor — an
 becomes a false accept.** Both outcomes are unacceptable, and both are removed by the same
 rule.
 
-**A client-side hold does not fix it.** An earlier draft of this section proposed keeping the
-client's registration until the commit reply. That contradicts §4: leases exist precisely
-because a crashed client sends nothing. Once the commit is accepted, the pin must be owned by
+**A client-side hold does not fix it.** Keeping the client's registration until the commit
+reply contradicts §4: leases exist precisely because a crashed client sends nothing. Once the commit is accepted, the pin must be owned by
 a server.
 
 The rule is the mirror of register-before-use:
@@ -292,17 +288,16 @@ selected and covered by these cases before Resolver Phase A ships.**
 A hierarchical `min` reduction: client library → GRV proxy (over valid leases) → Cluster
 Controller → `globalOldestClientRV` → broadcast → derived floors (§6).
 
-**Corrected in review:** 1.0's "no component tracks transactions individually" is not literally
-true once §4a exists. The real property is that *the hierarchy transports minima rather than a
+The property is **not** that no component tracks transactions individually — once §4a exists,
+Commit Proxies track their pins. It is that *the hierarchy transports minima rather than a
 cluster-wide transaction list*: clients track their own active read versions to compute their
 minimum, Commit Proxies track only their accepted-but-unvalidated request pins, and the Cluster
 Controller aggregates per-source minima. No component holds a global registry of transactions.
 
-Empty reductions are defined **independently per source**: `min(∅) = currentVersion`.
-1.0 said the derived floors then "fall back to their policy defaults", which is wrong in one
-direction; an earlier draft of this document then said the Resolver simply reaches
-`currentVersion`, which is wrong in the other, because it ignored the second source of §4a.
-Precisely:
+Empty reductions are defined **independently per source**: `min(∅) = currentVersion`. Two
+readings are wrong in opposite directions — that the derived floors "fall back to their policy
+defaults", and that the Resolver simply reaches `currentVersion`, which ignores the second
+source of §4a. Precisely:
 
 - If **both** the client-registration set and the accepted-but-unvalidated commit set are
   empty, `globalValidationDemand = currentVersion` and the Resolver may reclaim up to the
@@ -315,9 +310,9 @@ Register-before-use (§3) and handoff-before-release (§4a) jointly make this sa
 consumer is covered first by a client registration and, after commit acceptance, by an
 overlapping server-side pin.
 
-**Open in 2.0 — §3 and §5 are in tension.** 1.0 has clients report to a *stable* GRV proxy
-("one lease copy, no deduplication") while §3 piggybacks the report on `GetReadVersion`. But
-GRV requests are **load-balanced across all GRV proxies today** —
+**Open — §3 and §5 are in tension.** Having clients report to a *stable* GRV proxy ("one
+lease copy, no deduplication") cannot coexist with §3's piggybacking on `GetReadVersion`,
+because GRV requests are **load-balanced across all GRV proxies today** —
 `basicLoadBalance(cx->getGrvProxies(...), &GrvProxyInterface::getConsistentReadVersion, ...)`
 (`fdbclient/NativeAPI.cpp:5300`). Both properties cannot hold as written. Two resolutions:
 
@@ -335,9 +330,9 @@ GRV requests are **load-balanced across all GRV proxies today** —
   conservative either way; precision is bounded by the oldest surviving copy.
 
 The second is preferred — it leaves the hot path untouched and pays only in retention
-precision — but 1.0 asserts the first. **Choose explicitly.**
+precision. **Choose explicitly.**
 
-## 6. Observation vs derived floors *(unchanged, and load-bearing)*
+## 6. Observation vs derived floors
 
 **Sources** (each with `min(∅) = currentVersion`):
 
@@ -372,7 +367,7 @@ Two consequences worth stating explicitly, because Phase A's schedule depends on
   therefore **ships as a retention no-op** until cluster-wide participation is negotiated, and
   its win is conditional on adoption.
 
-## 7. Properties *(verified)*
+## 7. Properties
 
 - **Client floors and published retention floors advance in one direction.** Individual
   in-flight-request minima may move both ways as requests enter and leave (§4a), but the
@@ -393,14 +388,14 @@ Two consequences worth stating explicitly, because Phase A's schedule depends on
 - **Backward compatible with no flag day** — a legacy client never reports and therefore never
   holds the floor down; the mixed-mode formula of §6 makes this literal.
 
-## 7a. Adversarial input — NEW
+## 7a. Adversarial input
 
 `GetReadVersionRequest` arrives on a **`PublicRequestStream`**
 (`GrvProxyInterface.h:227`, `fdbclient/include/fdbclient/CommitProxyInterface.h:48`) and its
 `verify()` returns `true` unconditionally (`GrvProxyInterface.h:120`). A client-supplied
 `clientFloor` is therefore untrusted input that, unbounded, pins cluster-wide history — a
-denial-of-service against storage retention with a single malformed field. 1.0 has no
-adversarial section. At minimum the proxy must **clamp** the reported floor to a
+denial-of-service against storage retention with a single malformed field. At minimum the
+proxy must **clamp** the reported floor to a
 policy-maximum window before it enters the reduction, and the maximum should be
 administratively bounded (per-tenant, or a cluster knob). The clamp is also the natural
 enforcement point for the retention budgets of `00-overview.md` §2.
@@ -455,7 +450,7 @@ inherits the same contract:
 > completeness would require
 > server-issued per-transaction registrations, outside v1.
 
-## 8. Open implementation choices *(deliberately)*
+## 8. Open implementation choices
 
 1. **Lease duration and renewal frequency** — a latency/over-retention trade-off.
 2. **Watermark distribution transport** — `ServerDBInfo` field vs a light dedicated broadcast.
@@ -464,10 +459,10 @@ inherits the same contract:
    frequently-updated integer would rebroadcast the whole structure to every worker. Note also
    that `ServerDBInfo` is "not available to the client" (`:36–38`) — which is fine, since every
    consumer of the watermark is a server.
-3. **New in 2.0 — stable-proxy vs multi-copy leases** (§5). Not a free choice: it decides
+3. **Stable-proxy vs multi-copy leases** (§5). Not a free choice: it decides
    whether the hot GRV path changes, and under multi-copy it decides how stale copies are
    refreshed or expired.
-4. **New in 2.0 — where the §4a handoff is linearized against lease expiry.** Candidates: a
+4. **Where the §4a handoff is linearized against lease expiry.** Candidates: a
    generation-fenced handoff operation in the floor protocol, or the Commit Proxy participating
    as a source in the reduction and awaiting confirmation before accepting the handoff. May be
    subsumed into the watermark transport choice (2).
@@ -519,76 +514,6 @@ Two observations that bound this:
   eventual propagation** (§4a) — that is the one economy not available here.
 
 This cost may exceed the lease map's and deserves its own benchmark.
-
-## 10. Changelog 1.0 → 2.0
-
-| # | Change | Basis |
-|---|---|---|
-| F1 | **§4a added — commit lifecycle handoff.** 1.0 never fixed the liveness boundary at commit submission; the race lets the floor pass an in-flight request's read version. Blocking for Resolver Phase A | review; `01-resolver.md` §3 |
-| F2 | §5: **§3/§5 tension surfaced** — GRV requests are load-balanced today (`NativeAPI.cpp:5300`), so "stable proxy" and "piggyback on GetReadVersion" cannot both hold as written. Two resolutions given; multi-copy is correct but contradicts "no deduplication" | `NativeAPI.cpp:5300` |
-| F3 | §5: empty reductions **corrected** — they are per-source, and the Resolver reaches `currentVersion` only when *both* client registrations and in-flight commit pins are empty; otherwise the non-empty source still pins the floor. (1.0's "fall back to policy defaults" was wrong in one direction, this document's first draft in the other) | §5 + §6 arithmetic |
-| F4 | §7a added — **untrusted `clientFloor`**. `GetReadVersionRequest` is a `PublicRequestStream` with `verify() { return true; }`; an unbounded reported floor is a retention DoS. Clamp required | `GrvProxyInterface.h:120`, `:227` |
-| F5 | §2: **`setVersion()` bypasses the sensor** (`NativeAPI.cpp:3594–3603`), and a fresh `DatabaseContext` has `clientFloor = 0`. Two resolutions; documenting the status quo preferred | `NativeAPI.cpp:3594–3603` |
-| F6 | §9 added — GRV proxies hold **no per-client state today**; this adds state and a sweep to a latency-critical role, multiplied by proxy count under F2's second resolution | `GrvProxyServer.cpp:187–211` |
-| F7 | §4: caution added so "`commit` → unregister" is not misread as licensing release at submission | F1 |
-| F8 | §1, §3, §7, §8 **verified against code** — no per-client state today; the request format has established **protocol-version-gated** extension patterns (see F14); recovery already invalidates old read versions; `ServerDBInfo` churn concern is real | see cites inline |
-| F9 | §6: the negotiation gate stated as a **scheduling fact** — Phase A ships as a retention no-op until participation is negotiated | `03` §6 |
-
-Second review round — closing F1 properly:
-
-| # | Change | Basis |
-|---|---|---|
-| F10 | §4a **rewritten**. The first draft's "hold the client registration until the commit reply" is withdrawn: it depends on client survival and so contradicts §4, whose whole premise is that clients crash. The pin must be **server-side** once the commit is accepted | review |
-| F11 | §4a: failure mode stated precisely — admission and retention are **the same value today** (`Resolver.cpp:359` → `ConflictSet.cpp:805`, `:986`), so while coupled the race yields a **spurious `transaction_too_old`** (availability), and only a decoupled admission produces a false accept. Both removed by the same rule | `Resolver.cpp:359`, `ConflictSet.cpp:805`, `:986` |
-| F12 | §4a: three states introduced — `CLIENT_COVERED` → `HANDOFF_ACCEPTED` → `VALIDATION_COMPLETE`; submission is not the handoff | review |
-| F13 | §4a, §6: accepted-but-unvalidated commits become a **second source** in the reduction (`oldestInFlightCommitRV`), with the pin ordered before the client's coverage is released | review |
-| F14 | §3: protocol-version **fencing** required — the in-tree idiom is `ar.protocolVersion().hasX()` (`CommitProxyInterface.h:151–153`, `CommitTransaction.h:351`); "append and old readers ignore" was too automatic | `CommitProxyInterface.h:151–153` |
-| F15 | §7a: **impersonation** added — a forged update to another client's entry causes unsafe *under*-retention, which the clamp does not address; identity binding, ownership-checked generations, monotone updates and identity-creation caps required | review |
-| F16 | Editorial: fenced blocks in §2 and §6 replaced with plain formula lines; "the GRV proxy as aggregation point" made conditional on the §5 choice; multi-copy staleness no longer described as refreshing "lazily" | review |
-
-Third review round — discharging the proof obligations:
-
-| # | Change | Basis |
-|---|---|---|
-| F17 | §4a: **monotonicity proof added.** `oldestInFlightCommitRV` is *not* monotone in isolation; the property comes from handoff overlap. Published floor defined as `max(previousPublishedFloor, newlyDerivedFloor)`. §7's "everything advances in one direction" narrowed accordingly | review |
-| F18 | §4a: **identity added** — the commit carries `{clientID, leaseGeneration}` (its RV already travels as `transaction.read_snapshot`), gated like §3 and untrusted like §7a, since `CommitTransactionRequest` is also a `PublicRequestStream` | `CommitProxyInterface.h:44`, `:203–229` |
-| F19 | §4a: **linearization condition** stated — exactly one of {expiry before handoff → reject, pin before expiry → client death irrelevant} wins; the transport is §8.4, the condition is not optional | review |
-| F20 | §7a: the clamp made a **visible admission** — reject, or return the granted floor/capability; only the granted floor enters the reduction; a budget may deny a lease but not pretend it granted one | review; `02-storage.md` §5 |
-| F21 | §5: "no component tracks transactions individually" **corrected** — the hierarchy transports minima, not a transaction list; clients track their own RVs and proxies track their pins | review |
-| F22 | §8: fourth open choice added (where the handoff linearizes); "not on this list" reworded to *how, not whether* | review |
-| F23 | Changelog F8 reconciled with F14 (protocol-version gating); §4a's blocking sentence replaced by the simulation requirement | review |
-| F24 | §2: **manual-RV policy closed for v1** — `setVersion(v)` provides no extended-retention lease; protected old-version access requires the registered GRV path. This was a fifth open decision masquerading as a preference; §8 stays at four | review |
-| F25 | §4a: garbled sentence about the alternative handoff repaired | review |
-
-Fourth review round — implementation-cost and trust boundary:
-
-| # | Change | Basis |
-|---|---|---|
-| F26 | §8.4: under **multi-copy leases** the handoff identity must locate one specific live registration — `{clientID, leaseGeneration}` does not name the custodian proxy, and the CC holds only aggregated minima. A generation-fenced `registrationID` or lease capability is required; the cost falls only on multi-copy, which the §5 trade-off should carry | review |
-| F27 | §9: **Commit Proxy cost added** — per-request generation-fenced pins until `VALIDATION_COMPLETE`. Withdrawal maps onto the existing resolver-reply await (`CommitProxyServer.cpp:1008–1016`), so only installation needs new ordering; acknowledgement may not be downgraded to eventual propagation | `CommitProxyServer.cpp:1008–1016` |
-| F28 | §7a: **trust boundary declared** — fencing stops cross-client tampering and retention DoS, but completeness of a client's own reported minimum is not provable. Same boundary FDB already relies on for client-supplied conflict ranges (`NativeAPI.cpp:3961`); Byzantine completeness is outside v1 | `NativeAPI.cpp:3961` |
-
-Fifth review round — server-side symmetry:
-
-| # | Change | Basis |
-|---|---|---|
-| F29 | §4a: **proxy failure does not withdraw coverage.** The §9 await closes only the normal path; a custodian that dies mid-validation would otherwise let the floor advance past a live request. Invariant added with its three admissible discharges | review |
-| F30 | §4a: current FDB recovery **eliminates the need for proxy-local inheritance** — one proxy failure replaces the whole generation (`quorum(failed, 1)` → `commit_proxy_failed()`, `ClusterRecovery.cpp:461–472`, `:1952`), so option (1) is not expressible and option (2) holds structurally after recovery. A conservative barrier is nevertheless required until the old generation is fenced from influencing a durable decision; its release condition was subsequently corrected in F33. Forward-looking clause added if single-proxy replacement is ever introduced | `ClusterRecovery.cpp:461–472`, `:1387`, `:1952` |
-| F31 | §8.4 acceptance criterion, §9 failure-path qualification, and five failure-injection cases with the property `HANDOFF_ACCEPTED ⇒ pin ∨ fenced ∨ terminal` | review |
-| F32 | §7a: containment of a misreported client floor **demonstrated** via handoff rejection below the published floor, not merely asserted | review |
-| F33 | §4a: barrier release **corrected from timer-driven to fencing-driven**. `TLOG_TIMEOUT` bounds detection, not recovery completion; the barrier holds until the old generation is provably unable to influence a durable decision — old Resolvers may still reply (`Resolver.cpp:832–843`) but the previous epoch's TLogs are locked at `epochEnd` (`LogSystem.cpp:420`). The simulation property now reads *fenced from influencing a durable decision* | review; `ClusterRecovery.cpp:466`, `Resolver.cpp:832–843`, `LogSystem.cpp:420` |
-
-Sixth review round — internal coherence after the pin:
-
-| # | Change | Basis |
-|---|---|---|
-| F34 | §1 **rewritten**: "every retention decision consumes one number" predates §4a. Storage consumes `globalOldestClientRV`; the Resolver consumes `min(globalOldestClientRV, oldestInFlightCommitRV)`. `globalOldestRV` standardized to `globalOldestClientRV` throughout | review |
-| F35 | Closing sentence corrected: the no-gap guarantee holds **within a live generation**; recovery and priced revocation may end it explicitly under the existing `transaction_too_old` contract. Only *silent* early reclamation is forbidden | review; §7 |
-
-**Unchanged and confirmed:** the client-side monotonic minimum, leases-not-unregistration, the
-hierarchical `min` reduction, GRV proxies as the aggregation point for client registrations
-(subject to the §5 choice), the observation/derived-floor
-split, the §6 invariant, one-directional advance, and backward compatibility with no flag day.
 
 ## In one sentence
 
