@@ -259,7 +259,10 @@ machinery with `conditionalInstallProxyMinimum`; what it may not be is eventual 
 > client, the admission floor cannot have passed `r`. If every copy expired, the client should
 > already have revoked locally, and refusing reinstallation is the correct answer. During GRV
 > proxy failure the generation barrier prevents the admission floor from advancing before
-> coverage is rebuilt.
+> coverage is rebuilt, **or** until every client usage window that generation could authorise
+> has conservatively expired (§2). Note this is the *client* side, where the temporal contract
+> already bounds authorisation; it does not make a timeout evidence on the Commit Proxy side,
+> where release stays fencing-driven (§4a).
 
 **When coordination is needed.** What is installed is not the freshly granted read version but
 `candidateMinimum = min(clientOldestActiveRV, newlyGrantedRV)`, so a new *grant* does not imply
@@ -559,7 +562,7 @@ installation while authoritativeEffectiveFloor ≤ r      → accept
 ```
 
 **Consequently the handoff needs no client identity.** It is enough to install the proxy's
-contribution conditionally on the published floor:
+contribution conditionally on the authoritative effective floor:
 
 ```
 InstallResult conditionalInstallProxyMinimum(
@@ -773,7 +776,8 @@ Two consequences worth stating explicitly, because Phase A's schedule depends on
 
 - **Client floors and published retention floors advance in one direction.** Individual
   in-flight-request minima may move both ways as requests enter and leave (§4a), but the
-  overlap rule and rejection below the published floor ensure the *effective published* floor
+  overlap rule and rejection below the authoritative effective floor ensure the *effective
+  published* floor
   never retreats and never loses coverage. **A delayed publication of a still-valid
   contribution can only over-retain** — but a *lost renewal* is the opposite case and is
   handled by the lease's temporal contract (§2): the client revokes locally before the server
@@ -897,7 +901,8 @@ inherits the same contract:
    **Acceptance criterion for any candidate — both sides.** It must define ownership and
    cleanup across process failure on each path, not only client failure: the **GRV proxy**
    generation barrier for the client install, so the admission floor cannot advance before
-   coverage is rebuilt (§7); and the **Commit Proxy** generation barrier for the proxy install,
+   coverage is rebuilt or every usage window it could authorise has conservatively expired
+   (§2, §7); and the **Commit Proxy** generation barrier for the proxy install,
    so a replacement or the Cluster Controller preserves the previous generation's minimum until
    that generation's accepted requests are inherited or fenced closed (§4a).
 
