@@ -1199,7 +1199,7 @@ everything the floor adds afterwards.
 
 | Direction | Evidence |
 |---|---|
-| current → current | Simulation on `5ad1f15ac9` (clean tree, binary sha256 `a0e3da67…`), `tests/fast/CycleTest.toml`, seeds 101/202/303, buggify on, all three passing. Counters read **per resolver and then summed**, never as an aggregate maximum: 6704 batches carried a floor across 17 resolvers, `RetentionFloorDerivedLocally` was 0 on **every** one of them, and `UnsampleableReadVersions` 0. Per resolver, `RetentionFloorFromRequest = ConflictSetSweepsRun + ConflictSetSweepsSkippedFloorUnchanged` holds exactly — every batch carrying a floor is one sweep opportunity. |
+| current → current | Simulation on `5ad1f15ac9` (clean tree, binary sha256 `a0e3da67…`), `tests/fast/CycleTest.toml`, seeds 101/202/303, buggify on, all three passing. Counters read **per instance and then aggregated**, never as a maximum across instances. **Resolver**, summed over 17 instances: `RetentionFloorFromRequest` 6704, `RetentionFloorDerivedLocally` 0 on every one of them, `ConflictSetSweepsRun` 6590, `ConflictSetSweepsSkippedFloorUnchanged` 114. **Commit Proxy**, 29 instances: `UnsampleableReadVersions` 0. **GRV proxy**, 19 instances: `ProcessTransportPeers` peaks at 25 — a per-process gauge of transport peers, reported as such and never summed or read as a client count. |
 | older → current | Unit test: a legacy payload, really deserialized, handed to the real selection function, which takes the fallback branch. |
 | current → older | Unit test: the older peer ignores the unknown field and keeps every field it knows. |
 | **mixed-version RPC** | **Not covered.** A simulated cluster runs one binary, and restarting tests *replace* the cluster rather than overlapping versions — phase one runs entirely on the old binary, phase two entirely on the new — so no old Commit Proxy ever talks to a new Resolver in this harness. |
@@ -1220,6 +1220,21 @@ with the server still running so the last samples are published:
 | `CommitBatchQueuing` (pre-existing control) | 6 | 1 | 76 |
 | `ReadVersionAgeAtCommit` | 6 | 10 | 40 |
 | `BatchPipelineEntryToValidation` | 6 | 3 | 76 |
+
+**A diagnostic identity holds per Resolver instance, in all 17 of them:**
+
+```
+RetentionFloorFromRequest + RetentionFloorDerivedLocally
+    == ConflictSetSweepsRun + ConflictSetSweepsSkippedFloorUnchanged
+```
+
+6704 + 0 on the left, 6590 + 114 on the right. Every processed request selects exactly one
+floor source, every batch yields exactly one sweep opportunity, and that opportunity ends as
+either run or skipped. The `DerivedLocally` term matters even though it is zero here: state the
+identity without it and it stops holding precisely when F2 exercises the fallback. It is *not*
+a production assertion — an exception or actor cancellation between the two points can leave
+the accumulators transiently unequal — but it is a strong cross-check that no counters from
+different instances were mixed, which is the mistake it was written to catch.
 
 `ConflictSetSweepsSkippedFloorUnchanged` totalled 114, entirely within four short-lived
 resolvers recruited at startup and during early recoveries; the long-lived ones are at zero,
