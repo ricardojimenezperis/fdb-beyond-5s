@@ -857,7 +857,15 @@ inherits the same contract:
 
 ## 8. Open implementation choices
 
-1. **Lease duration and renewal frequency** — a latency/over-retention trade-off.
+1. **Lease duration and renewal frequency** — a latency/over-retention trade-off. The safety
+   *rule* is frozen (§2); what is open are its parameters, subject to
+
+   ```
+   clientUsageWindow + driftMargin < serverLeaseDuration
+   renewInterval                   < clientUsageWindow
+   ```
+
+   with local revocation when no acknowledgement arrives in time. F0 sizes them.
 2. **Watermark distribution transport** — `ServerDBInfo` field vs a light dedicated broadcast.
    **The concern is corroborated:** `ServerDBInfo.id` "Changes each time any other member
    changes" (`fdbserver/core/include/fdbserver/core/ServerDBInfo.h:40`), so a
@@ -867,22 +875,31 @@ inherits the same contract:
 3. **Stable-proxy vs multi-copy leases** (§5). Not a free choice: it decides
    whether the hot GRV path changes, and under multi-copy it decides how stale copies are
    refreshed or expired.
-4. **Where `conditionalInstallProxyMinimum` executes, and how it is transported.** It must run
-   at the authority that publishes the floor, so that the compare against
-   `authoritativeEffectiveFloor` — including `authoritativeCurrentVersion − W_commit`, not the
-   demand minimum alone — and the installation are one atomic step. Candidates: a generation-fenced operation in the floor
-   protocol, or the Commit Proxy participating as a source and awaiting confirmation before
-   admitting the batch. May be subsumed into the watermark transport choice (2).
+4. **Where the conditional-install authority executes, and how *both* operations are
+   transported.** Each must run at the authority that publishes the relevant floor, so that the
+   comparison and the installation are one atomic step:
 
-   **This is no longer entangled with lease identity.** Because admission is decided against
-   the published floor rather than against a specific registration (§4a), the handoff does not
-   need to locate a custodian GRV proxy, and multi-copy leases (§5) cost nothing extra here —
-   removing what used to be the strongest argument for the stable-proxy option.
+   - `conditionalInstallClientMinimum`, ordered against `authoritativeStorageAdmissionFloor`;
+   - `conditionalInstallProxyMinimum`, ordered against `authoritativeResolverEffectiveFloor`
+     — `max(globalValidationDemand, authoritativeCurrentVersion − W_commit)`, not the demand
+     minimum alone.
 
-   **Acceptance criterion for any candidate:** it must define ownership and cleanup across
-   *Commit Proxy* failure, not only client failure. A replacement proxy or the Cluster
-   Controller must preserve the previous generation's minimum until that generation's accepted
-   requests are inherited or fenced closed (§4a).
+   **They may share transport and machinery, never guards** (§3, §4a). Candidates for either: a
+   generation-fenced operation in the floor protocol, or the source awaiting confirmation
+   before proceeding — the GRV proxy before replying, the Commit Proxy before admitting the
+   batch. May be subsumed into the watermark transport choice (2).
+
+   **Neither is entangled with lease identity.** Because admission is decided against a floor
+   rather than against a specific registration (§4a), the handoff does not need to locate a
+   custodian GRV proxy, and multi-copy leases (§5) cost nothing extra here — removing what used
+   to be the strongest argument for the stable-proxy option.
+
+   **Acceptance criterion for any candidate — both sides.** It must define ownership and
+   cleanup across process failure on each path, not only client failure: the **GRV proxy**
+   generation barrier for the client install, so the admission floor cannot advance before
+   coverage is rebuilt (§7); and the **Commit Proxy** generation barrier for the proxy install,
+   so a replacement or the Cluster Controller preserves the previous generation's minimum until
+   that generation's accepted requests are inherited or fenced closed (§4a).
 
 Open here means *how*, not *whether*: the §4a handoff rule itself is a correctness requirement,
 not an implementation preference.
