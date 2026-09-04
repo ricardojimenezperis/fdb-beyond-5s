@@ -189,32 +189,122 @@ commitProxyOldestInFlightRV  = min(batchOldestReadSnapshot over its non-terminal
 oldestInFlightCommitRV       = min(commitProxyOldestInFlightRV over all Commit Proxies)
 ```
 
-with `min(∅) = currentVersion` as everywhere else. The new state is at most **one scalar per
-batch**, computed while the batch is being built, and held until the whole batch reaches a
-terminal state. Holding a batch's contribution until its last transaction finishes
-over-retains slightly and is safe. With a single active batch a single scalar suffices; with
-several concurrent batches, a small queue of the batches that already exist — pop the head
-when batches finish in order, or mark terminal and advance the head when they can finish out
-of order.
+with `min(∅) = currentVersion` as everywhere else. The per-batch value is computed once,
+during the traversal the proxy already performs while building the batch.
 
 **Name it `readSnapshot` (or `inFlightReadVersion`), never `commitVersion`.** The history that
 must survive is the history from the commit's *read* version, not the version eventually
 assigned to it. Where other documents use CTS for this read version, say so explicitly.
 
-The Commit Proxy is the natural custodian precisely because it needs no new bookkeeping: the
-transactions are already in the batch, and it already computes a resolver-visible horizon
-(`fdbserver/commitproxy/CommitProxyServer.cpp:2104`).
+**Batches within one proxy reach their terminal state in order — verified.** The commit
+pipeline serialises batches by `localBatchNumber`: a batch cannot enter resolution until its
+predecessor has (`CommitProxyServer.cpp:850`) nor logging until its predecessor has (`:867`),
+with assertions that the predecessor is exactly `N−1` (`:465`, `:864`, `:868`, `:1843`); and
+resolvers process a proxy's batches in version order (`Resolver.cpp:324`). Out-of-order
+completion therefore does not arise, and the structure the minimum needs is a queue with
+**FIFO removal** — not a random-access set.
 
-**What must be ordered is the contribution, not an object.** It is not enough for the proxy
-to update a local minimum and propagate it eventually — the floor could advance during that
-propagation. The sequence is:
+Read versions, however, are *not* ordered by batch number: a transaction holding an old read
+version can be submitted late. The minimum is therefore not the head of the queue, and this
+is exactly the sliding-window-minimum problem — solved exactly by a **monotonic deque**:
 
-1. the commit arrives;
-2. the proxy checks `read_snapshot ≥ publishedFloor`;
-3. the commit's `read_snapshot` enters the proxy's pending minimum;
-4. that minimum is made visible to the aggregation;
-5. only then is the commit admitted for validation, and the client's coverage may lapse;
-6. the batch's contribution is withdrawn once the batch reaches a terminal state.
+```
+admit batch N with value v:   while (back().value >= v) pop_back();  push_back({N, v})
+retire batch N:               if (front().batch == N) pop_front()
+current minimum:              front().value, or currentVersion when empty
+```
+
+Amortised O(1) on both paths, exact, with no scan, no cached minimum, no holder count, no
+sentinel and no capacity policy — its size is bounded by the pending batches themselves. An
+entry dropped from the back can never be needed again: it is dropped only in favour of a
+*later* batch with a value no greater, and by FIFO removal that later batch outlives it.
+
+**A batch's identity in the deque is its `localBatchNumber`, not a slot index.** An entry may
+leave through `pop_back` long before its batch completes, so the batch must not hold a pointer
+or index into the structure.
+
+**Where retirement happens makes FIFO structural rather than assumed.** Placing it at the
+already-serialised logging transition (`CommitProxyServer.cpp:867–869`, which asserts the
+predecessor is `N−1`) inherits the ordering from the pipeline instead of depending on callback
+order, and it lands *after* that batch's resolution completed — conservative, which is the
+safe side. An `ASSERT(localBatchNumber == nextFloorRetirementBatch)` is still worth keeping as
+an executable statement of the invariant.
+
+> **Rejected alternative:** a preallocated ring of per-batch minima with `VERSION_MAX`
+> sentinels for terminal slots, a cached minimum with a holder count, and an O(B) vectorisable
+> rescan when the last holder leaves. It exists to tolerate holes left by out-of-order
+> completion — which the pipeline above excludes — and it buys a scan over a few dozen 8-byte
+> values, less than one cache miss, at the price of a fixed capacity that has no firm bound to
+> size it against (`COMMIT_BATCHES_MEM_BYTES_HARD_LIMIT` is a byte budget, `ServerKnobs.cpp:855`;
+> `RESET_MASTER_BATCHES` and `RESET_RESOLVER_BATCHES` are diagnostics, not limits).
+
+### Coordination is the slow path, and most commits avoid it
+
+The reduction is cheap; what is expensive is **linearising a lowered contribution against the
+floor advance**, because that is a network interaction on the commit path. It is needed far
+less often than every commit. Two values must be distinguished:
+
+- `localMinimum` — the exact minimum of the proxy's deque;
+- `acknowledgedProxyMinimum` — the last contribution whose global installation is confirmed
+  and not yet withdrawn.
+
+A new batch needs coordination only when it **lowers** the installed contribution:
+
+```
+effectiveFloor = max(lastPublishedGlobalFloor, currentVersion − W_commit)
+
+if      (batchOldestReadSnapshot <  effectiveFloor)             pre-reject as too old
+else if (batchOldestReadSnapshot >= acknowledgedProxyMinimum)   admit with no coordination
+else                                                            install lower minimum,
+                                                                await acknowledgement, admit
+```
+
+If `b ≥ acknowledgedProxyMinimum`, the already-installed contribution is at least as
+conservative and the global floor cannot have passed `b`; the commit is admitted with no
+round trip at all. Since read versions cluster near `now` in normal operation, this is the
+common case.
+
+Symmetrically, when the deque advances to a **higher** minimum, publication may be deferred:
+`acknowledgedProxyMinimum < localMinimum` only over-retains, and it keeps later batches
+covered by the older, lower value without coordination.
+
+**The installation must be conditional, not a send.** Between the proxy's `effectiveFloor`
+test and the arrival of its update, the global floor can advance — so the aggregator applies a
+compare-and-set:
+
+```
+installIfStillAdmissible(proxyGeneration, publicationSequence, b)
+    → publishedFloor > b : FAIL, and the proxy rejects the batch as transaction_too_old
+    → otherwise          : b enters the reduction, and only then is it acknowledged
+```
+
+That is what makes "expiry won" and "installation won" mutually exclusive (§4a). Without it
+the proxy's own test is a time-of-check/time-of-use gap and a batch can be admitted under a
+floor that has already passed it.
+
+**Acknowledgements carry `{proxyGeneration, publicationSequence, coveredThroughBatch}` and
+stale ones are discarded**, so that a late acknowledgement of a *raise* cannot overwrite a
+lower minimum installed since. The value the fast path reads is the minimum known to still be
+installed globally — not simply the last one sent.
+
+### The proxy's pre-filter is conservative; the Resolver stays authoritative
+
+Computing the minimum over *admitted* transactions requires the proxy to apply its own
+`read_snapshot ≥ effectiveFloor` test. Today that decision belongs to the resolver
+(`ConflictSet.cpp:805`) and the proxy only translates the reply
+(`CommitProxyServer.cpp:2043`), so this adds a second rejection point and the two must be
+ordered explicitly:
+
+| | Outcome |
+|---|---|
+| proxy admits, resolver admits | commit proceeds |
+| proxy admits, resolver rejects | the resolver's `transaction_too_old` stands — its floor may have advanced in transit |
+| proxy rejects | the commit never reaches the resolvers |
+| proxy under-filters | safe: the minimum is lower than necessary, so it over-retains |
+| proxy over-filters (floor read too far ahead) | **availability regression** — a live commit is refused |
+
+Hence the rule: **the proxy's filter is conservative and the resolver keeps the final say.**
+
 
 ### What the handoff is, and is not
 
@@ -267,13 +357,12 @@ overlap, not from each source being monotone on its own:
 Publication is monotone by construction: `publishedFloor = max(previousPublishedFloor,
 newlyDerivedFloor)`.
 
-### What the proxy actually has to check
+### Identity is for the leases, not for the handoff
 
-The check that matters at admission is **`read_snapshot ≥ publishedFloor`**, together with
-installing the new contribution atomically with respect to any subsequent floor advance.
-Validating a *specific* client registration is not required for this step: what makes the
-commit safe is that its read version is still above the floor and that its coverage is in the
-reduction before the floor can move again.
+The checks that matter at admission are the ones above: `read_snapshot` against the effective
+floor, and the conditional installation of the contribution. Validating a *specific* client
+registration is not among them — what makes the commit safe is that its read version is still
+above the floor and that its coverage is in the reduction before the floor can move again.
 
 Client identity remains necessary — but for a different purpose: protecting lease entries
 against collisions, impersonation and updates from other incarnations of the same client
@@ -290,9 +379,9 @@ gating as §3; note this is a `PublicRequestStream` (`:44`), so both are untrust
 
 Exactly one of two events wins: expiry **before** the contribution is in the reduction, and
 the commit is rejected `transaction_too_old`; or the contribution enters the reduction
-**before** expiry, and subsequent client death is irrelevant. One workable shape is for the
-aggregator to acknowledge the proxy's updated minimum only once that contribution
-participates in the reduction, and for the commit to count as admitted only then. The
+**before** expiry, and subsequent client death is irrelevant. The conditional-installation
+primitive above is what enforces that exclusivity: the aggregator acknowledges only once the
+contribution participates in the reduction, and the commit counts as admitted only then. The
 transport is an implementation choice (§8.4); the ordering is not.
 
 
@@ -364,7 +453,14 @@ authorized party consumes it to decide.)
 - dies after the handoff and before dispatching to the Resolvers;
 - dies after dispatching to only some of them;
 - all Resolvers reply, but the proxy dies before withdrawing or publishing the withdrawal;
-- a successor generation appears while replies from the previous one are still arriving.
+- a successor generation appears while replies from the previous one are still arriving;
+- the global floor advances between the proxy's admissibility test and the arrival of its
+  installation — the conditional install must fail and the batch be rejected, never admitted;
+- a late acknowledgement of a *raised* contribution arrives after a lower one was installed —
+  it must be discarded, not allowed to overwrite `acknowledgedProxyMinimum`;
+- a batch retires while its entry is no longer in the deque (it left through `pop_back`), and
+  the minimum must not change;
+- retirement order is violated — an assertion that must never fire.
 
 **The rules above are correctness requirements. The handoff's linearization mechanism must be
 selected and covered by these cases before Resolver Phase A ships.**
@@ -582,9 +678,17 @@ many thousands of client processes that is new memory and new periodic work on a
 critical role; under the multi-copy resolution of §5 it multiplies by the proxy count. Size it
 before choosing lease duration (§8.1) — the two decisions are coupled.
 
-**Commit Proxies acquire far less (§4a):** one scalar per non-terminal batch — the minimum
-`read_snapshot` admitted into it — reduced to `commitProxyOldestInFlightRV`. The transactions
-themselves are already in the batch, so no per-commit collection is added.
+**Commit Proxies acquire far less (§4a):** a monotonic deque of `{localBatchNumber, minimum
+read_snapshot}`, bounded by the pending batches and usually far smaller, since every entry
+dominated by a later one is discarded on arrival. The transactions themselves are already in
+the batch, so no per-commit collection is added, and the amortised cost of both the admit and
+the retire path is O(1).
+
+The measurable cost is not the reduction but the **coordination rate**: the fraction of
+batches whose minimum falls below `acknowledgedProxyMinimum` and therefore pay a network
+linearisation on the commit path (§4a). That fraction, its added latency, and the gap
+`localMinimum − acknowledgedProxyMinimum` (which prices deferred publication as
+over-retention) are the numbers that decide whether this design is affordable.
 
 Two observations that bound this:
 
