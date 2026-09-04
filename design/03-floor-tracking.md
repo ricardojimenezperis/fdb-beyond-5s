@@ -752,10 +752,17 @@ because GRV requests are **load-balanced across all GRV proxies today** —
 
   **This makes copy identity a protocol requirement.** GRV requests are load-balanced
   (`NativeAPI.cpp:5300`), so a client cannot infer afterwards which proxy installed its
-  registration. The acknowledgement must name the granting copy — a `{grvProxyID,
-  leaseGeneration, clientUsageDeadline}` grant, or an equivalent way of recovering the endpoint
-  from the RPC. Without it a client cannot obey the rule of refreshing every copy it holds, and
-  multi-copy silently becomes "refresh whichever proxy the next request reaches".
+  registration. The acknowledgement must name the granting copy **and give the client a way to
+  reach it** — `{grvProxyID, leaseGeneration, grantedServerLeaseDuration, renewalTarget}`, or an
+  equivalent recovery of the endpoint from the RPC; an identifier alone names a copy without
+  making it reachable. Without this a client cannot obey the rule of refreshing every copy it
+  holds, and multi-copy silently becomes "refresh whichever proxy the next request reaches".
+
+  **The grant carries a duration, never an absolute instant.** A server-produced deadline would
+  mix clock domains and would let a late reply hand back time the client had already spent; the
+  client computes `clientRequestStart + conservativeClientWindow(grantedServerLeaseDuration)`
+  on its own clock, from before the request was sent, which is §2's inequality applied
+  literally.
 
 **Decided for v1: the second — multi-copy, with no global deduplication.** It leaves the hot
 path untouched and pays only in retention precision, and since the handoff no longer resolves
@@ -890,6 +897,13 @@ inherits the same contract:
 
 Two remain open — the lease parameters (1) and where the conditional-install authority runs
 (4). Entries 2 and 3 are **decided for v1** and kept here with the reasoning that settled them.
+
+**Two implementation choices remain open, but no safety rule does.** Every admissible choice
+must satisfy the frozen ordering and temporal constraints: lease parameters that violate
+`clientUsageWindow + driftMargin < serverLeaseDuration` break safety, and a conditional-install
+placement that does not guarantee atomicity against the floor advance, or generation fencing,
+breaks it too. What is open is *which values and which mechanism satisfy the rules* — not
+whether the rules hold.
 
 1. **Lease duration and renewal frequency** — *open.* — a latency/over-retention trade-off. The safety
    *rule* is frozen (§2); what is open are its parameters, subject to

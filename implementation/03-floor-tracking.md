@@ -458,7 +458,11 @@ All verified against `a443d3ee60`:
 # Part II — Decisions
 
 Five entries, of which **two remain open**: the lease parameters (§6.5) and the exact
-placement and transport of the conditional-install authority (§6.3). The other three are
+placement and transport of the conditional-install authority (§6.3). *Open choices, not open
+safety rules — an admissible answer must still satisfy the frozen ordering and temporal
+constraints: parameters violating `clientUsageWindow + driftMargin < serverLeaseDuration`
+break safety, and so does an install that is not atomic against the floor advance or not
+generation-fenced.* The other three are
 settled — watermark transport (§6.1) and lease placement (§6.2) decided for v1, and manually
 set read versions (§6.4) decided earlier — and are recorded here because they still have to be
 *implemented* deliberately.
@@ -495,12 +499,25 @@ load-balanced (`NativeAPI.cpp:5300`). Both cannot hold.
 
   ```cpp
   struct GrantedReadVersionLease {
-      UID    grvProxyID;          // which copy this acknowledgement installed
+      UID    grvProxyID;                  // which copy this acknowledgement installed
       UID    leaseGeneration;
-      double clientUsageDeadline; // the window of §9, measured from before the request was sent
-      // plus whatever is needed to validate the grant
+      double grantedServerLeaseDuration;  // a duration, never an absolute instant
+      GrvProxyInterface renewalTarget;    // or an equivalent routable handle
   };
   ```
+
+  **The grant carries a duration, not a deadline.** An absolute instant produced by the server
+  would mix clock domains, and a late reply would silently hand back time the client had
+  already spent waiting. The client derives its own bound, on its own clock, from the moment
+  taken *before* the request went out:
+
+  ```cpp
+  clientUsageDeadline = clientRequestStart + conservativeClientWindow(grantedServerLeaseDuration);
+  ```
+
+  which is §2's inequality applied directly. And `grvProxyID` names the copy but does not let
+  the client reach it: a routable target must come with it, or `basicLoadBalance` must report
+  which interface won.
 
   This is not a third open choice — the shape may vary, and an equivalent way of recovering the
   endpoint from the RPC would do — but it **is** a requirement on F2's implementation and its
