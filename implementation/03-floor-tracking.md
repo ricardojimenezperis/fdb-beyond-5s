@@ -420,12 +420,22 @@ All verified against `a443d3ee60`:
   A sentinel does not represent absence, and two separate `Optional`s admit states the protocol
   does not define — a floor without its generation reads as "a floor with no fencing", which is
   precisely what the generation exists to prevent (§10).
-* **There is an established idiom for adding wire fields**: append to `serializer(...)`
-  gated on the negotiated protocol version, e.g. `if (ar.protocolVersion().hasNativeCdc())`
-  in `ClientDBInfo::serialize` (`CommitProxyInterface.h:151–153`) and `hasMutationChecksum()`
-  (`CommitTransaction.h:351`). Use it; do not rely on "old servers ignore trailing bytes",
-  because a *new* server receiving the old encoding must still distinguish absence from a
-  zero floor.
+* **Gating and compatibility are two different problems, and F1 needs only one of them.**
+
+  > Protocol gating is required when the presence of a field enables behaviour an older peer
+  > cannot safely participate in. F1 adds only neutral plumbing: structural compatibility is
+  > represented by `Optional`, without a protocol-version bump. F2's demand-driven behaviour
+  > remains negotiation-gated cluster-wide.
+
+  FlatBuffers carries the schema, so a *structural* addition needs no gate — and claiming one
+  would describe the wire falsely. The versioned-binary idiom exists for the positional
+  serializers, where fields must be appended under
+  `if (ar.protocolVersion().hasNativeCdc())` (`ClientDBInfo::serialize`,
+  `CommitProxyInterface.h:151–153`) or `hasMutationChecksum()` (`CommitTransaction.h:351`), and
+  the same file states the split explicitly: *FlatBuffer serializers include every schema
+  field; versioned binary serializers must omit the newer ones for older peers.* Splitting a
+  FlatBuffers `serializer(...)` call into several to imitate the gate breaks the table — in F1
+  it left every field, not just the new one, unpopulated.
 * **`ServerDBInfo` is the wrong broadcast channel.** Its `id` "changes each time any other
   member changes" (`ServerDBInfo.h:40`), so a continuously-updated integer there would
   rebroadcast the whole structure to every worker. (It is also not available to clients,
@@ -445,17 +455,22 @@ All verified against `a443d3ee60`:
 
 ---
 
-# Part II — Decisions to make before writing code
+# Part II — Decisions
 
-Five, with the recommendation and what it costs. Four are the design's explicit open
-choices; the fifth is already decided but must be *implemented* deliberately.
+Five entries, of which **two remain open**: the lease parameters (§6.5) and the exact
+placement and transport of the conditional-install authority (§6.3). The other three are
+settled — watermark transport (§6.1) and lease placement (§6.2) decided for v1, and manually
+set read versions (§6.4) decided earlier — and are recorded here because they still have to be
+*implemented* deliberately.
 
-## 6.1 Watermark transport
+## 6.1 Watermark transport — decided for v1
 
-`ServerDBInfo` field vs a dedicated light broadcast. **Recommendation: dedicated
-broadcast**, because of `ServerDBInfo.h:40` above — the value updates continuously and
-`ServerDBInfo` rebroadcasts everything on every change. Cost: new machinery. Benefit: the
-hot path of every worker is untouched.
+**Consumer-scoped dedicated publication.** Not `ServerDBInfo`: its `id` "changes each time any
+other member changes" (`ServerDBInfo.h:40`), so a continuously-updated value there would
+rebroadcast the whole structure to every worker. Publication is scoped to the consumers that
+need it — the Resolver on the resolve request (as F1 already does), the Commit Proxy through
+the install/acknowledge exchange (§4.2a), and an additional stream only towards Storage
+Servers. Cost: new machinery. Benefit: no worker pays for a value it does not consume.
 
 ## 6.2 Stable-proxy vs multi-copy leases
 
@@ -471,10 +486,11 @@ load-balanced (`NativeAPI.cpp:5300`). Both cannot hold.
   dedicated `RenewOldestReadVersion` can target the stable proxy, but stale copies elsewhere
   must be **explicitly refreshed or allowed to expire**; they do not catch up on their own.
 
-**Recommendation: multi-copy.** It leaves the hot path untouched and pays only in retention
-precision. **Under the floor-based conditional-install model it adds no handoff-identity
-cost** (§6.3): the choice now affects only GRV-path load balancing, lease-state multiplication
-and retention precision.
+**Decided for v1: multi-copy, with no global deduplication.** It leaves the GRV hot path
+untouched and pays only in retention precision. **Under the floor-based conditional-install
+model it adds no handoff-identity cost** (§6.3), so what remains is lease-state multiplication
+— up to one entry per client per proxy — and a floor that advances no faster than the least
+recently refreshed copy.
 
 ## 6.3 Where the conditional install runs
 
@@ -1143,7 +1159,7 @@ everything the floor adds afterwards.
 
 | Direction | Evidence |
 |---|---|
-| current → current | Simulation. `tests/fast/CycleTest.toml`, seeds 101/202/303 with buggify, on the binary built from the change under test: `RetentionFloorFromRequest` 2887, `RetentionFloorDerivedLocally` 0, and the Resolver's equality assert running on every batch. |
+| current → current | Simulation. `tests/fast/CycleTest.toml`, seeds 101/202/303 with buggify, on the binary built from `77e533caf4` (fork branch `floor/observability`): `RetentionFloorFromRequest` 2887, `RetentionFloorDerivedLocally` 0, and the Resolver's equality assert running on every batch. |
 | older → current | Unit test: a legacy payload, really deserialized, handed to the real selection function, which takes the fallback branch. |
 | current → older | Unit test: the older peer ignores the unknown field and keeps every field it knows. |
 | **mixed-version RPC** | **Not covered.** A simulated cluster runs one binary, and restarting tests *replace* the cluster rather than overlapping versions — phase one runs entirely on the old binary, phase two entirely on the new — so no old Commit Proxy ever talks to a new Resolver in this harness. |
@@ -1153,9 +1169,12 @@ everything the floor adds afterwards.
 > demand-driven floors**, because the single-binary simulator and restarting tests cannot
 > overlap protocol implementations. It needs a cluster of two binaries on real processes;
 > role placement cannot be chosen, so it means reading the recruitment traces to confirm the
-> topology actually occurred, across several attempts. In F1 the cost was not worth the signal,
-> since a wire fault could only break plumbing. In F2 the same fault decides whether a
-> transaction is admitted.
+> topology actually occurred, across several attempts. In F1 a wire fault could abort Resolvers
+> and cause an availability failure during a rolling upgrade, but it could not yet alter
+> retention or admission semantics, and the deterministic bidirectional wire tests cover the
+> serialization contract without the cost and nondeterminism of a two-binary cluster. In F2
+> mixed-binary RPC becomes mandatory, because the decoded value controls admission and
+> retention safety.
 
 ## 17. Build and test reference
 
@@ -1184,8 +1203,9 @@ behaviour-neutral, which is what lets a reviewer accept one without accepting th
    upstream, and without it nothing downstream is observable.
 3. **F0a** — only the measurements that need no protocol (§7a); in parallel with step 2, and
    neither changes behaviour. F0b ships with the code it measures.
-4. **F1** — the request-carried derived floor, protocol-version gated, with equality asserts
-   (§8). No aggregator and no broadcast, so it does not force the transport decision.
+4. **F1** — the request-carried derived floor, encoded as an `Optional` field with no
+   protocol-version bump, with legacy fallback and equality asserts (§8). No aggregator and no
+   broadcast.
 5. **F2** — incarnation IDs, leases, renewal, expiry, administrative limits, and the
    aggregation of `globalOldestClientRV` (§9), including **`conditionalInstallClientMinimum`**
    — guarded by `authoritativeStorageAdmissionFloor`, never by the resolver's floor — and the

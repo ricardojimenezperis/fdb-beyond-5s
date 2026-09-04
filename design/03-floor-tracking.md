@@ -1,7 +1,9 @@
 # Floor Tracking — the Oldest Active Read Version
 
 *Status: design frozen at the protocol level, reviewed against `apple/foundationdb` main @
-`a443d3ee60`. **Four** implementation choices remain deliberately open (§8). Three ordering
+`a443d3ee60`. **Two** implementation choices remain deliberately open (§8): the lease
+parameters and the placement and transport of the conditional-install authority. Watermark
+transport and lease placement are decided for v1. Three ordering
 requirements are closed as **rules**: the initial registration (§3), the lease's temporal
 contract (§2), and the commit lifecycle handoff (§4a) — the last of which was what blocked
 Resolver Phase A (`01-resolver.md` §3), with its linearization mechanism left to §8.4. Claims
@@ -733,9 +735,11 @@ because GRV requests are **load-balanced across all GRV proxies today** —
   allowed to expire** — they cannot be assumed to catch up on their own. Safety is
   conservative either way; precision is bounded by the oldest surviving copy.
 
-The second is preferred — it leaves the hot path untouched and pays only in retention
-precision, and since the handoff no longer resolves a specific registration (§4a) it costs
-nothing on that side either. **Choose explicitly.**
+**Decided for v1: the second — multi-copy, with no global deduplication.** It leaves the hot
+path untouched and pays only in retention precision, and since the handoff no longer resolves
+a specific registration (§4a) it costs nothing on that side either. What it does cost is
+lease-state multiplication, up to one entry per client per proxy, and a floor advancing no
+faster than the least recently refreshed copy.
 
 ## 6. Observation vs derived floors
 
@@ -860,9 +864,12 @@ inherits the same contract:
 > completeness would require
 > server-issued per-transaction registrations, outside v1.
 
-## 8. Open implementation choices
+## 8. Implementation choices
 
-1. **Lease duration and renewal frequency** — a latency/over-retention trade-off. The safety
+Two remain open — the lease parameters (1) and where the conditional-install authority runs
+(4). Entries 2 and 3 are **decided for v1** and kept here with the reasoning that settled them.
+
+1. **Lease duration and renewal frequency** — *open.* — a latency/over-retention trade-off. The safety
    *rule* is frozen (§2); what is open are its parameters, subject to
 
    ```
@@ -873,17 +880,21 @@ inherits the same contract:
    with local revocation when no acknowledgement arrives in time. The measurements that size
    them (lease lifetimes, renewal and expiry rates, reported-floor lag) presuppose the
    registrations exist, so they ship with the lease implementation rather than preceding it.
-2. **Watermark distribution transport** — `ServerDBInfo` field vs a light dedicated broadcast.
-   **The concern is corroborated:** `ServerDBInfo.id` "Changes each time any other member
+2. **Watermark distribution transport** — *decided for v1: consumer-scoped dedicated
+   publication*, not `ServerDBInfo`. Each consumer receives the value on a path it already
+   needs: the Resolver on the resolve request, the Commit Proxy through the
+   install/acknowledge exchange (§4a), and an additional stream only towards Storage Servers.
+   **The concern that settled it is corroborated:** `ServerDBInfo.id` "Changes each time any other member
    changes" (`fdbserver/core/include/fdbserver/core/ServerDBInfo.h:40`), so a
    frequently-updated integer would rebroadcast the whole structure to every worker. Note also
    that `ServerDBInfo` is "not available to the client" (`:36–38`) — which is fine, since every
    consumer of the watermark is a server.
-3. **Stable-proxy vs multi-copy leases** (§5). Not a free choice: it decides
+3. **Stable-proxy vs multi-copy leases** (§5) — *decided for v1: multi-copy, with no global
+   deduplication.* Not a free choice: it decides
    whether the hot GRV path changes, and under multi-copy it decides how stale copies are
    refreshed or expired.
 4. **Where the conditional-install authority executes, and how *both* operations are
-   transported.** Each must run at the authority that publishes the relevant floor, so that the
+   transported** — *open.* Each must run at the authority that publishes the relevant floor, so that the
    comparison and the installation are one atomic step:
 
    - `conditionalInstallClientMinimum`, ordered against `authoritativeStorageAdmissionFloor`;
