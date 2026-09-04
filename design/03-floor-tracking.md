@@ -1,10 +1,11 @@
 # Floor Tracking — the Oldest Active Read Version
 
 *Status: design frozen at the protocol level, reviewed against `apple/foundationdb` main @
-`a443d3ee60`. **Four** implementation choices remain deliberately open (§8). The commit
-lifecycle handoff — the one correctness gap in this protocol, and what was blocking Resolver
-Phase A (`01-resolver.md` §3) — is closed as a **rule** in §4a, with its linearization
-mechanism left to §8.4. Claims about current FDB carry `file:line`.*
+`a443d3ee60`. **Four** implementation choices remain deliberately open (§8). Three ordering
+requirements are closed as **rules**: the initial registration (§3), the lease's temporal
+contract (§2), and the commit lifecycle handoff (§4a) — the last of which was what blocked
+Resolver Phase A (`01-resolver.md` §3), with its linearization mechanism left to §8.4. Claims
+about current FDB carry `file:line`.*
 
 ## 1. Why this protocol must exist
 
@@ -82,10 +83,15 @@ bounded clock drift. Then a lost message costs availability — the client stops
 never lets the server reclaim under a live reader.
 
 This is the one place the protocol depends on time rather than on fencing, and it is worth
-stating plainly: elsewhere (barrier release, §4a) timers are explicitly *not* evidence.
-Alternatively the same guarantee can be obtained by a non-temporal fencing mechanism, which
-belongs with the open choices of §8. Without one of the two, register-before-use protects only
-the instant of grant, not the declared lifetime of the transaction.
+stating plainly: elsewhere (barrier release, §4a) timers are explicitly *not* evidence. The
+same guarantee could be obtained by a non-temporal fencing mechanism instead.
+
+**Decision for v1: the temporal contract above is frozen, not left open.** It is fully
+specified, it is the standard lease argument, and its failure direction is availability rather
+than safety; leaving it open would block Phase A on a decision that already has a working
+default. A non-temporal replacement remains a possible later change — it is not one of the
+open choices in §8. Without one of the two, register-before-use protects only the instant of
+grant, not the declared lifetime of the transaction.
 
 **Read-only transactions are covered here and nowhere else.** They never reach a Commit
 Proxy, so this client-side minimum is the only thing protecting their snapshots — which makes
@@ -151,22 +157,38 @@ and any later update that *lowers* a source's minimum — therefore needs the sa
 primitive as the Commit Proxy side (§4a):
 
 ```
-conditionalInstallSourceMinimum(sourceGeneration, publicationSequence,
-                                candidateMinimum, requiredReadVersion)
+conditionalInstallClientMinimum(sourceGeneration, publicationSequence,
+                                candidateMinimum, requiredReadVersion,
+                                authoritativeStorageRetentionFloor)
 ```
 
-which compares against `authoritativeEffectiveFloor` and installs atomically. **The GRV reply
-is sent only after the acknowledgement.** It may share an implementation with
-`conditionalInstallProxyMinimum`; what it may not be is eventual propagation. *Zero added
-client messages does not mean zero internal coordination.*
+installing atomically, with **the GRV reply sent only after the acknowledgement**. It may share
+machinery with `conditionalInstallProxyMinimum`; what it may not be is eventual propagation.
+*Zero added client messages does not mean zero internal coordination.*
 
-**The cost lands where it is affordable, because the fast path is symmetric.** Coordination is
-needed only when the registration would *lower* the proxy's installed source minimum. A freshly
-granted `r` is the newest version in the cluster, so whenever that proxy already has an older
-registered client — the busy case — `r` is above the installed minimum and no round trip is
-needed. The slow path appears exactly when the registered population is empty or entirely
-newer, i.e. when the floor is free to run and the cluster is idle enough to pay for it. A
-renewal never lowers a minimum, so renewals never take the slow path.
+> **The two installs must not share a guard.** A client registration protects *historical
+> values* in Storage, where the entire point is to allow
+> `clientOldestActiveRV < currentVersion − W_commit`. Guarding it with the resolver's effective
+> floor would make any reader older than `W_commit` unable to reinstall its contribution — on
+> landing at another GRV proxy, or during recovery — which destroys the extended read window
+> this project exists to provide. The guards are therefore per consumer:
+>
+> | Install | Wins only if |
+> |---|---|
+> | `conditionalInstallClientMinimum` | Storage still retains `requiredReadVersion` — i.e. against `authoritativeStorageRetentionFloor`, and only the explicit revocation protocol may take it away (§6, `02-storage.md` §5) |
+> | `conditionalInstallProxyMinimum` | `authoritativeResolverEffectiveFloor = max(globalValidationDemand, authoritativeCurrentVersion − W_commit)` has not passed it |
+
+**When coordination is needed.** What is installed is not the freshly granted read version but
+`candidateMinimum = min(clientOldestActiveRV, newlyGrantedRV)`, so a new *grant* does not imply
+a new *contribution*. The rule is exactly `candidateMinimum ≥ acknowledgedSourceMinimum` for
+that copy — the recency of `newlyGrantedRV` proves nothing by itself. Under multi-copy leases
+(§5) a client already holding an old read version can land on a GRV proxy that has never seen
+it and lower that proxy's minimum sharply, so:
+
+- a renewal reaching a copy that already exists does not lower it, and is free;
+- a renewal or GRV that *creates* a new copy can lower it, and is not;
+- another acknowledged copy may in principle demonstrate continuous coverage, but exploiting
+  that requires **generation-fenced evidence** of it; without such evidence, take the slow path.
 
 ## 4. Leases, not unregistration
 
@@ -667,7 +689,10 @@ Two consequences worth stating explicitly, because Phase A's schedule depends on
 - **Client floors and published retention floors advance in one direction.** Individual
   in-flight-request minima may move both ways as requests enter and leave (§4a), but the
   overlap rule and rejection below the published floor ensure the *effective published* floor
-  never retreats and never loses coverage. Delayed or lost messages can only over-retain.
+  never retreats and never loses coverage. **A delayed publication of a still-valid
+  contribution can only over-retain** — but a *lost renewal* is the opposite case and is
+  handled by the lease's temporal contract (§2): the client revokes locally before the server
+  may expire the entry.
   The existing Resolver code already requires a monotone floor —
   `if (newOldestVersion > cs->oldestVersion)` (`fdbserver/resolver/ConflictSet.cpp:986`) — so
   this model needs no change to that invariant.
