@@ -174,8 +174,13 @@ Commit *submission* is not the handoff — a message in flight can be lost.
 
 > Commit submission alone does not transfer retention responsibility. The handoff completes
 > only when the proxy's updated minimum is in the reduction. Until then the client lease
-> remains responsible. A commit whose coverage lapses before that point is rejected as
-> `transaction_too_old` — not new behaviour; the client retry loop already handles it.
+> remains responsible.
+
+**What `HANDOFF_ACCEPTED` promises, exactly.** It removes the race that the demand-driven
+floor introduces: after it, the disappearance of client demand cannot strand the commit. It
+does **not** promise that an admitted commit will never receive `transaction_too_old` — the
+ordinary `currentVersion − W_commit` term can still overtake it in transit, exactly as today.
+The handoff closes a new hole; it does not extend the current maximum lifetime of a commit.
 
 ### The Commit Proxy contributes an aggregated minimum, not per-transaction pins
 
@@ -260,9 +265,15 @@ else                                                            install lower mi
 ```
 
 If `b ≥ acknowledgedProxyMinimum`, the already-installed contribution is at least as
-conservative and the global floor cannot have passed `b`; the commit is admitted with no
-round trip at all. Since read versions cluster near `now` in normal operation, this is the
-common case.
+conservative, so **the demand-derived component of the floor cannot have passed `b`**; the
+commit is admitted with no round trip at all. Since read versions cluster near `now` in normal
+operation, this is the common case.
+
+**That guarantee covers only the demand-derived component.** The `currentVersion − W_commit`
+term can still overtake `b` while the batch travels — with `acknowledgedProxyMinimum = 100`,
+`b = 120` and `currentVersion − W_commit = 130`, the resolver floor is 130 even though the
+proxy holds a contribution at 100. That is today's behaviour preserved: a transaction can
+become too old in transit, and the resolver keeps the final decision.
 
 Symmetrically, when the deque advances to a **higher** minimum, publication may be deferred:
 `acknowledgedProxyMinimum < localMinimum` only over-retains, and it keeps later batches
@@ -364,25 +375,59 @@ floor, and the conditional installation of the contribution. Validating a *speci
 registration is not among them — what makes the commit safe is that its read version is still
 above the floor and that its coverage is in the reduction before the floor can move again.
 
-Client identity remains necessary — but for a different purpose: protecting lease entries
+Client identity remains necessary — but only on the **GRV path**, to protect lease entries
 against collisions, impersonation and updates from other incarnations of the same client
-(§7a). `clientID` and `leaseGeneration` ride the commit request, appended to
-`CommitTransactionRequest::serialize`
-(`fdbclient/include/fdbclient/CommitProxyInterface.h:203–229`) under the same protocol-version
-gating as §3; note this is a `PublicRequestStream` (`:44`), so both are untrusted input.
+(§7a), where `GetReadVersionRequest` is a `PublicRequestStream`
+(`GrvProxyInterface.h:227`, `:120`) and everything a client sends is untrusted input.
 
-**The linearization obligation stands.** What must be ordered, by one authority, is:
+**`clientID` and `leaseGeneration` therefore do not need to be added to
+`CommitTransactionRequest`** — an earlier formulation required them there so the proxy could
+validate a specific registration during the handoff. With admission decided against the
+published floor, that wire change disappears along with the model that motivated it.
 
-1. the disappearance of a client contribution through lease expiry;
-2. the incorporation of the commit into the proxy's effective minimum;
-3. the irreversible advance and publication of the floor.
+**The race is between the floor and the installation — not between expiry and the handoff.**
+Lease expiry only removes *a* contribution; it may later allow the floor to advance, but it is
+not itself the event that invalidates a commit. If the lease has expired while the floor has
+**not** passed `r` — because another client holds it down, or because it simply has not moved
+— the commit is perfectly admissible, and rejecting it would be a spurious loss of
+availability. The two mutually exclusive outcomes are:
 
-Exactly one of two events wins: expiry **before** the contribution is in the reduction, and
-the commit is rejected `transaction_too_old`; or the contribution enters the reduction
-**before** expiry, and subsequent client death is irrelevant. The conditional-installation
-primitive above is what enforces that exclusivity: the aggregator acknowledges only once the
-contribution participates in the reduction, and the commit counts as admitted only then. The
-transport is an implementation choice (§8.4); the ordering is not.
+```
+publishedFloor > r  at installation time   → reject transaction_too_old
+installation while publishedFloor ≤ r      → accept
+```
+
+**Consequently the handoff needs no client identity.** It is enough to install the proxy's
+contribution conditionally on the published floor:
+
+```
+InstallResult conditionalInstallProxyMinimum(
+        ProxyID proxy, Generation generation, PublicationSequence sequence,
+        Version candidateMinimum, Version requiredReadVersion) {
+    // executed by the same authority that publishes the floor
+    if (publishedFloor > requiredReadVersion) return TooOld;
+    installOrLowerSourceMinimum(proxy, generation, sequence, candidateMinimum);
+    return Installed;
+}
+```
+
+For a batch, after individually filtering commits that are already too old,
+`candidateMinimum = min(read_snapshot of the survivors)` and `requiredReadVersion =
+candidateMinimum`; every admitted commit then satisfies `read_snapshot ≥ candidateMinimum ≥
+publishedFloor`.
+
+`clientID` and `leaseGeneration` therefore do **not** need to travel on the commit request.
+They remain necessary to authenticate and protect lease updates on the GRV path (§7a), but
+they play no part in installing a Commit Proxy's minimum.
+
+**The linearization obligation stands**, restated over the right events. One authority must
+order:
+
+1. removal and update of source contributions;
+2. installation of Commit Proxy minima;
+3. the irreversible advance of `publishedFloor`.
+
+The transport is an implementation choice (§8.4); the ordering is not.
 
 
 ### Proxy failure does not withdraw coverage
@@ -513,7 +558,8 @@ because GRV requests are **load-balanced across all GRV proxies today** —
   conservative either way; precision is bounded by the oldest surviving copy.
 
 The second is preferred — it leaves the hot path untouched and pays only in retention
-precision. **Choose explicitly.**
+precision, and since the handoff no longer resolves a specific registration (§4a) it costs
+nothing on that side either. **Choose explicitly.**
 
 ## 6. Observation vs derived floors
 
@@ -646,21 +692,16 @@ inherits the same contract:
 3. **Stable-proxy vs multi-copy leases** (§5). Not a free choice: it decides
    whether the hot GRV path changes, and under multi-copy it decides how stale copies are
    refreshed or expired.
-4. **Where the §4a handoff is linearized against lease expiry.** Candidates: a
-   generation-fenced handoff operation in the floor protocol, or the Commit Proxy participating
-   as a source in the reduction and awaiting confirmation before accepting the handoff. May be
-   subsumed into the watermark transport choice (2).
+4. **Where `conditionalInstallProxyMinimum` executes, and how it is transported.** It must run
+   at the authority that publishes the floor, so that the compare against `publishedFloor` and
+   the installation are one step. Candidates: a generation-fenced operation in the floor
+   protocol, or the Commit Proxy participating as a source and awaiting confirmation before
+   admitting the batch. May be subsumed into the watermark transport choice (2).
 
-   **Under the multi-copy lease option (§5) the handoff identity must locate one specific live
-   registration.** `{clientID, leaseGeneration}` alone does not say *which* GRV proxy holds the
-   authoritative copy, and the Cluster Controller knows only aggregated minima — it cannot
-   validate a concrete identity. The GRV reply must therefore return a generation-fenced
-   `registrationID` (naming the custodian proxy and its generation) or a verifiable lease
-   capability, carried by the commit request and consumed atomically by the handoff; expiry and
-   handoff for that registration must be linearized by the *same* authority. Choosing between
-   an ID, a token and a directed RPC belongs here, not in §4a. Note this cost falls **only** on
-   multi-copy: under the stable-proxy option the custodian is already derivable from `clientID`
-   and the proxy set (§5), which is a point in its favour that the §5 trade-off should carry.
+   **This is no longer entangled with lease identity.** Because admission is decided against
+   the published floor rather than against a specific registration (§4a), the handoff does not
+   need to locate a custodian GRV proxy, and multi-copy leases (§5) cost nothing extra here —
+   removing what used to be the strongest argument for the stable-proxy option.
 
    **Acceptance criterion for any candidate:** it must define ownership and cleanup across
    *Commit Proxy* failure, not only client failure. A replacement proxy or the Cluster
