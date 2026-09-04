@@ -60,7 +60,32 @@ active RVs: {130, 170}        →  publishes 130
 
 Monotonicity is load-bearing: when the oldest transaction ends the floor advances, and that
 version is irrevocably abandoned by this client. Published values may lag
-(`reportedMin ≤ localMin`); lag only over-retains, never under-retains.
+(`reportedMin ≤ localMin`); a *lagging report* only over-retains, never under-retains.
+
+**A lost renewal is the opposite case, and it is not covered by that sentence.** If a renewal
+is lost or delayed the *server* may expire the entry while a live client still believes its
+snapshot is usable — under-retention, and a safety failure rather than an availability one. The
+lease therefore needs an explicit temporal contract:
+
+- an acknowledgement grants a **defined usage window**, and the client may use versions of that
+  generation only within it;
+- the client renews with margin, well before the window closes;
+- if no acknowledgement arrives before its own conservative deadline, the client **stops using
+  and locally revokes** the snapshots of that generation, rather than assuming the server still
+  holds them;
+- a GRV reply that arrives too late to supply a full window is discarded, or re-registered
+  before use.
+
+Safety comes from the direction of the inequality: **the server's lease must outlast the
+client's self-imposed window**, measured from *before* the request was sent and allowing for
+bounded clock drift. Then a lost message costs availability — the client stops early — and
+never lets the server reclaim under a live reader.
+
+This is the one place the protocol depends on time rather than on fencing, and it is worth
+stating plainly: elsewhere (barrier release, §4a) timers are explicitly *not* evidence.
+Alternatively the same guarantee can be obtained by a non-temporal fencing mechanism, which
+belongs with the open choices of §8. Without one of the two, register-before-use protects only
+the instant of grant, not the declared lifetime of the transaction.
 
 **Read-only transactions are covered here and nowhere else.** They never reach a Commit
 Proxy, so this client-side minimum is the only thing protecting their snapshots — which makes
@@ -117,6 +142,31 @@ version as the client's floor *before* replying, so a read version is protected 
 instant the library receives it. **This is register-before-use, and Resolver Phase A depends
 on it** (`01-resolver.md` §3): it is what makes an empty population safe to reclaim
 against (§5).
+
+**Registering locally is not enough — it is the same race as the commit handoff, one step
+earlier.** If the proxy chooses `r`, records it locally, and lets the contribution propagate
+eventually, the authoritative floor can advance past `r` before the contribution arrives, and
+the client then receives and uses a read version nothing protects. The initial installation —
+and any later update that *lowers* a source's minimum — therefore needs the same authoritative
+primitive as the Commit Proxy side (§4a):
+
+```
+conditionalInstallSourceMinimum(sourceGeneration, publicationSequence,
+                                candidateMinimum, requiredReadVersion)
+```
+
+which compares against `authoritativeEffectiveFloor` and installs atomically. **The GRV reply
+is sent only after the acknowledgement.** It may share an implementation with
+`conditionalInstallProxyMinimum`; what it may not be is eventual propagation. *Zero added
+client messages does not mean zero internal coordination.*
+
+**The cost lands where it is affordable, because the fast path is symmetric.** Coordination is
+needed only when the registration would *lower* the proxy's installed source minimum. A freshly
+granted `r` is the newest version in the cluster, so whenever that proxy already has an older
+registered client — the busy case — `r` is above the installed minimum and no round trip is
+needed. The slow path appears exactly when the registered population is empty or entirely
+newer, i.e. when the floor is free to run and the cluster is idle enough to pay for it. A
+renewal never lowers a minimum, so renewals never take the slow path.
 
 ## 4. Leases, not unregistration
 
@@ -367,7 +417,7 @@ overlap, not from each source being monotone on its own:
 3. During the transition both are present.
 4. Afterwards the proxy's minimum covers `r` until the batch is terminal.
 5. Therefore no contribution `≤ r` ever vanishes while `r` is still needed.
-6. A commit whose `r` is below the already published floor is rejected.
+6. A commit whose `r` is below the authoritative effective floor is rejected.
 
 Publication is monotone by construction: `publishedFloor = max(previousPublishedFloor,
 newlyDerivedFloor)`.
@@ -427,7 +477,7 @@ exactly as today.
 For a batch, after individually filtering commits that are already too old,
 `candidateMinimum = min(read_snapshot of the survivors)` and `requiredReadVersion =
 candidateMinimum`; every admitted commit then satisfies `read_snapshot ≥ candidateMinimum ≥
-publishedFloor`.
+authoritativeEffectiveFloor`.
 
 `clientID` and `leaseGeneration` therefore do **not** need to travel on the commit request.
 They remain necessary to authenticate and protect lease updates on the GRV path (§7a), but
@@ -708,8 +758,9 @@ inherits the same contract:
    whether the hot GRV path changes, and under multi-copy it decides how stale copies are
    refreshed or expired.
 4. **Where `conditionalInstallProxyMinimum` executes, and how it is transported.** It must run
-   at the authority that publishes the floor, so that the compare against `publishedFloor` and
-   the installation are one step. Candidates: a generation-fenced operation in the floor
+   at the authority that publishes the floor, so that the compare against
+   `authoritativeEffectiveFloor` — including `authoritativeCurrentVersion − W_commit`, not the
+   demand minimum alone — and the installation are one atomic step. Candidates: a generation-fenced operation in the floor
    protocol, or the Commit Proxy participating as a source and awaiting confirmation before
    admitting the batch. May be subsumed into the watermark transport choice (2).
 
