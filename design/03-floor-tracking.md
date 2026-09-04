@@ -618,15 +618,16 @@ order:
 2. installation of Commit Proxy minima;
 3. the irreversible advance of `publishedFloor`.
 
-The transport is an implementation choice (§8.4); the ordering is not.
+The transport is decided (§8.4): both installs ride messages the proxies already send to the
+sequencer, and the existing replies are the acknowledgement. The ordering never was a choice.
 
 
 ### Proxy failure does not withdraw coverage
 
 The await of §9 closes the *normal* withdrawal path. It does not close this one: the proxy's
 minimum enters the reduction, the commit is admitted, the batch is dispatched to the
-Resolvers, and the proxy **dies before all replies arrive**. If the Cluster Controller drops
-the dead proxy's source from the reduction merely because the process disappeared, the floor
+Resolvers, and the proxy **dies before all replies arrive**. If the authority drops the dead
+proxy's source from the reduction merely because the process disappeared, the floor
 advances while a commit at `r` is still alive in a Resolver — the very gap §4a exists to
 close. The invariant is the server-side mirror of §4:
 
@@ -1022,10 +1023,20 @@ Two observations that bound this:
   `co_await getAllAsync(std::move(replies))`
   (`fdbserver/commitproxy/CommitProxyServer.cpp:1008–1016`) — so `VALIDATION_COMPLETE` maps
   onto an existing await point. Only the *installation* side needs new ordering.
-- **Installation may add coordination to the commit critical path.** §8.4 should prefer
-  batching, or an existing ordered channel, and must measure the added latency, message count
-  and Cluster Controller load. **Correctness does not permit replacing the acknowledgement with
-  eventual propagation** (§4a) — that is the one economy not available here.
+- **Installation adds work to the commit critical path, but no message.** §8.4 settles the
+  ordered channel: both installs ride requests the proxies already send to the sequencer, whose
+  replies are the acknowledgement, so the expected increase in message count is **zero**. What
+  must be measured is the load on the sequencer, the bytes added to those two messages, and the
+  duration added to its non-suspending stretch. **Correctness does not permit replacing the
+  acknowledgement with eventual propagation** (§4a) — that is the one economy not available
+  here.
+- **The batch minimum is known before the request is sent.** `commitBatcher`
+  (`CommitProxyServer.cpp:237`) already handles each arriving transaction, so
+  `batchOldestReadSnapshot` accumulates there at no extra traversal and is ready before
+  `commitBatch` begins — well before `GetCommitVersionRequest` is built and awaited
+  (`:901–907`, awaited immediately rather than overlapped). That minimum is taken over
+  *arrived* rather than *admitted* transactions, which can only make it lower, hence more
+  conservative.
 
 This cost may exceed the lease map's and deserves its own benchmark.
 
