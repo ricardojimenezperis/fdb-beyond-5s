@@ -149,9 +149,11 @@ admission at `now − W_commit` while retention follows the dynamic floor — an
 becomes a false accept.** Both outcomes are unacceptable, and both are removed by the same
 rule.
 
-**A client-side hold does not fix it.** Keeping the client's registration until the commit
-reply contradicts §4: leases exist precisely because a crashed client sends nothing. Once the
-commit is admitted, coverage must be owned by a server.
+**A client-side hold is useful but insufficient.** A live client may well keep the
+transaction in its active minimum until the commit reply — that is the normal case, and it
+helps. But a *crashed* client stops renewing, and its lease may expire while an
+already-received commit is still being validated. Server-side coverage is therefore required
+after admission regardless of well-behaved client behaviour.
 
 The rule is the mirror of register-before-use:
 
@@ -285,7 +287,7 @@ compare-and-set:
 
 ```
 installIfStillAdmissible(proxyGeneration, publicationSequence, b)
-    → publishedFloor > b : FAIL, and the proxy rejects the batch as transaction_too_old
+    → authoritativeEffectiveFloor > b : FAIL, and the proxy rejects it as transaction_too_old
     → otherwise          : b enters the reduction, and only then is it acknowledged
 ```
 
@@ -393,8 +395,8 @@ not itself the event that invalidates a commit. If the lease has expired while t
 availability. The two mutually exclusive outcomes are:
 
 ```
-publishedFloor > r  at installation time   → reject transaction_too_old
-installation while publishedFloor ≤ r      → accept
+authoritativeEffectiveFloor > r  at installation time   → reject transaction_too_old
+installation while authoritativeEffectiveFloor ≤ r      → accept
 ```
 
 **Consequently the handoff needs no client identity.** It is enough to install the proxy's
@@ -405,11 +407,20 @@ InstallResult conditionalInstallProxyMinimum(
         ProxyID proxy, Generation generation, PublicationSequence sequence,
         Version candidateMinimum, Version requiredReadVersion) {
     // executed by the same authority that publishes the floor
-    if (publishedFloor > requiredReadVersion) return TooOld;
+    const Version authoritativeEffectiveFloor =
+        max(publishedGlobalValidationDemand, authoritativeCurrentVersion − W_commit);
+    if (authoritativeEffectiveFloor > requiredReadVersion) return TooOld;
     installOrLowerSourceMinimum(proxy, generation, sequence, candidateMinimum);
     return Installed;
 }
 ```
+
+**The comparison is against the effective floor, not against the demand minimum alone.** The
+resolver's floor is `max(demand, currentVersion − W_commit)`, so testing only the demand
+component would admit batches the ordinary age bound has already passed — they would travel to
+the resolver merely to be rejected. Winning the install means the batch was admissible *at
+that instant*; the time term may still overtake it afterwards, on the way to the resolver,
+exactly as today.
 
 For a batch, after individually filtering commits that are already too old,
 `candidateMinimum = min(read_snapshot of the survivors)` and `requiredReadVersion =
@@ -532,7 +543,9 @@ source of §4a. Precisely:
   current version — it does **not** fall back to the fixed-lag bound.
 - If **either** source is non-empty, its minimum continues to pin the derived floor. With no
   clients but one in-flight commit at `r`, `globalValidationDemand = min(currentVersion, r) = r`
-  and `resolverValidationFloor = max(r, currentVersion − W_commit)` — reclamation stops at `r`.
+  and reclamation stops at `max(r, currentVersion − W_commit)`: at `r` while that commit is
+  still inside the ordinary commit window, and once `currentVersion − W_commit` overtakes `r`
+  the commit may become too old exactly as today.
 
 Register-before-use (§3) and handoff-before-release (§4a) jointly make this safe: every
 consumer is covered first by a client registration and, after commit acceptance, by an
