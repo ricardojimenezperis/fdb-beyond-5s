@@ -1199,11 +1199,44 @@ everything the floor adds afterwards.
 
 | Direction | Evidence |
 |---|---|
-| current → current | Simulation. `tests/fast/CycleTest.toml`, seeds 101/202/303 with buggify, on the binary built from `77e533caf4` (fork branch `floor/observability`): `RetentionFloorFromRequest` 2887, `RetentionFloorDerivedLocally` 0, and the Resolver's equality assert running on every batch. |
+| current → current | Simulation on the binary built from `f7d5a8f698`: `tests/fast/CycleTest.toml`, seeds 101/202/303 with buggify, all passing — `RetentionFloorFromRequest` 2101, `RetentionFloorDerivedLocally` 0, `UnsampleableReadVersions` 0, `ProcessTransportPeers` 25, with the Resolver's equality assert running on every batch. |
 | older → current | Unit test: a legacy payload, really deserialized, handed to the real selection function, which takes the fallback branch. |
 | current → older | Unit test: the older peer ignores the unknown field and keeps every field it knows. |
 | **mixed-version RPC** | **Not covered.** A simulated cluster runs one binary, and restarting tests *replace* the cluster rather than overlapping versions — phase one runs entirely on the old binary, phase two entirely on the new — so no old Commit Proxy ever talks to a new Resolver in this harness. |
 | production | `RetentionFloorDerivedLocally` detects a legacy sender or an absent field **only where the receiver is new**. It cannot observe the opposite direction; a new Commit Proxy talking to an old Resolver increments nothing, because the old Resolver has no such counter. |
+
+**Histograms are not observable in simulation, and that is a property of the harness.**
+`GetHistogramRegistry()` resolves against `g_network->global(INetwork::enHistogram)`
+(`Histogram.cpp:33–41`), so the registry is per-network; under Sim2 each simulated process has
+its own, while `histogramReport()` runs once in the orchestrating process
+(`fdbserver.cpp:2131`). No Commit Proxy histogram is emitted — not the new ones, and not the
+pre-existing `Resolution` or `CommitBatchQueuing`. They were therefore validated on a real
+single-process cluster, `configure new single memory`, binary `f7d5a8f698` (sha256
+`caa5e148…`), `--knob-histogram-report-interval=20`, 75 s of load followed by 35 s of drain
+with the server still running so the last samples are published:
+
+| Histogram | Reports | Non-empty buckets | Samples |
+|---|---|---|---|
+| `Resolution` (pre-existing control) | 6 | 5 | 74 |
+| `CommitBatchQueuing` (pre-existing control) | 6 | 1 | 74 |
+| `ReadVersionAgeAtCommit` | 6 | 8 | 41 |
+| `BatchPipelineEntryToValidation` | 6 | 3 | 74 |
+
+A report is a flush that had samples, not a transaction: `writeToLog()` clears the buckets
+when it emits (`Histogram.cpp:137`) and skips the event entirely when empty (`:98–100`), so
+`TotalCount` sums across events without double counting.
+
+Two observations from that run, both **observations and not invariants**.
+`BatchPipelineEntryToValidation` matched `Resolution` exactly, which is the strongest available
+control: same point in the code, same per-batch cardinality as a metric that has been in the
+tree for years. And `ReadVersionAgeAtCommit` came in *below* it, 41 against 74 — batches
+carrying no sampleable client transactions dominate under this light load. **There is no
+general inequality between the two**: their populations and termination points differ, so
+nothing should assert a relation in either direction.
+
+`UnsampleableReadVersions` was 0, which says the normal workload contains no excluded
+snapshots — not that the guard against a malformed `read_snapshot` works. That branch is
+unexercised and belongs to a unit test of the guarded computation, or to an adversarial run.
 
 > **Real mixed-binary RPC coverage is deferred to F2 and is required before enabling
 > demand-driven floors**, because the single-binary simulator and restarting tests cannot
