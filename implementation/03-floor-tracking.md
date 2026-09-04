@@ -1199,7 +1199,7 @@ everything the floor adds afterwards.
 
 | Direction | Evidence |
 |---|---|
-| current → current | Simulation on the binary built from `f7d5a8f698`: `tests/fast/CycleTest.toml`, seeds 101/202/303 with buggify, all passing — `RetentionFloorFromRequest` 2101, `RetentionFloorDerivedLocally` 0, `UnsampleableReadVersions` 0, `ProcessTransportPeers` 25, with the Resolver's equality assert running on every batch. |
+| current → current | Simulation on `5ad1f15ac9` (clean tree, binary sha256 `a0e3da67…`), `tests/fast/CycleTest.toml`, seeds 101/202/303, buggify on, all three passing. Counters read **per resolver and then summed**, never as an aggregate maximum: 6704 batches carried a floor across 17 resolvers, `RetentionFloorDerivedLocally` was 0 on **every** one of them, and `UnsampleableReadVersions` 0. Per resolver, `RetentionFloorFromRequest = ConflictSetSweepsRun + ConflictSetSweepsSkippedFloorUnchanged` holds exactly — every batch carrying a floor is one sweep opportunity. |
 | older → current | Unit test: a legacy payload, really deserialized, handed to the real selection function, which takes the fallback branch. |
 | current → older | Unit test: the older peer ignores the unknown field and keeps every field it knows. |
 | **mixed-version RPC** | **Not covered.** A simulated cluster runs one binary, and restarting tests *replace* the cluster rather than overlapping versions — phase one runs entirely on the old binary, phase two entirely on the new — so no old Commit Proxy ever talks to a new Resolver in this harness. |
@@ -1211,25 +1211,35 @@ everything the floor adds afterwards.
 its own, while `histogramReport()` runs once in the orchestrating process
 (`fdbserver.cpp:2131`). No Commit Proxy histogram is emitted — not the new ones, and not the
 pre-existing `Resolution` or `CommitBatchQueuing`. They were therefore validated on a real
-single-process cluster, `configure new single memory`, binary `f7d5a8f698` (sha256
-`caa5e148…`), `--knob-histogram-report-interval=20`, 75 s of load followed by 35 s of drain
+single-process cluster, `configure new single memory`, binary `5ad1f15ac9` (sha256 `a0e3da67…`), `--knob-histogram-report-interval=20`, 75 s of load followed by 35 s of drain
 with the server still running so the last samples are published:
 
 | Histogram | Reports | Non-empty buckets | Samples |
 |---|---|---|---|
-| `Resolution` (pre-existing control) | 6 | 5 | 74 |
-| `CommitBatchQueuing` (pre-existing control) | 6 | 1 | 74 |
-| `ReadVersionAgeAtCommit` | 6 | 8 | 41 |
-| `BatchPipelineEntryToValidation` | 6 | 3 | 74 |
+| `Resolution` (pre-existing control) | 6 | 6 | 76 |
+| `CommitBatchQueuing` (pre-existing control) | 6 | 1 | 76 |
+| `ReadVersionAgeAtCommit` | 6 | 10 | 40 |
+| `BatchPipelineEntryToValidation` | 6 | 3 | 76 |
+
+`ConflictSetSweepsSkippedFloorUnchanged` totalled 114, entirely within four short-lived
+resolvers recruited at startup and during early recoveries; the long-lived ones are at zero,
+and in the one inspected closely the counter had already reached its final value when only 9
+sweeps had run. That is the **bootstrap clamp**, not steady-state repetition: while
+`req.version` is still below `MAX_WRITE_TRANSACTION_LIFE_VERSIONS` the raw floor is negative,
+clamps to zero, and matches an `oldestVersion` still at zero. **No steady-state baseline was
+observed**, so the plateau signal is the counter's *increment* once the effective floor has
+first risen above zero — `Δ ConflictSetSweepsSkippedFloorUnchanged` — never its absolute value,
+which starts contaminated.
 
 A report is a flush that had samples, not a transaction: `writeToLog()` clears the buckets
 when it emits (`Histogram.cpp:137`) and skips the event entirely when empty (`:98–100`), so
 `TotalCount` sums across events without double counting.
 
 Two observations from that run, both **observations and not invariants**.
-`BatchPipelineEntryToValidation` matched `Resolution` exactly, which is the strongest available
-control: same point in the code, same per-batch cardinality as a metric that has been in the
-tree for years. And `ReadVersionAgeAtCommit` came in *below* it, 41 against 74 — batches
+`BatchPipelineEntryToValidation` matched `Resolution` exactly, and did so again in an
+independent repeat of the run — which is what makes it a control rather than a coincidence:
+same point in the code, same per-batch cardinality as a metric that has been in the tree for
+years. And `ReadVersionAgeAtCommit` came in *below* it, 40 against 76 — batches
 carrying no sampleable client transactions dominate under this light load. **There is no
 general inequality between the two**: their populations and termination points differ, so
 nothing should assert a relation in either direction.
