@@ -291,7 +291,9 @@ installIfStillAdmissible(proxyGeneration, publicationSequence, b)
     → otherwise          : b enters the reduction, and only then is it acknowledged
 ```
 
-That is what makes "expiry won" and "installation won" mutually exclusive (§4a). Without it
+That makes "the effective floor advanced past `r` first" and "the proxy contribution was
+installed while the effective floor was still ≤ `r`" mutually exclusive (§4a) — expiry is no
+longer the contender in this operation. Without it
 the proxy's own test is a time-of-check/time-of-use gap and a batch can be admitted under a
 floor that has already passed it.
 
@@ -765,9 +767,10 @@ This cost may exceed the lease map's and deserves its own benchmark.
 
 > Each client library maintains a monotonic minimum active read version, piggybacked on GRV
 > requests and kept alive by a lease only while snapshots live; GRV proxies and the Cluster
-> Controller reduce it by `min` into a single global watermark; retention responsibility is
-> handed to the Commit Proxies' minimum over their pending batches before the client's
-> coverage is released, and held until validation completes or the generation is fenced from
-> influencing a durable decision. Delays may over-retain; reclamation may precede the last consumer only through
+> Controller reduce it by `min` into a single global watermark; **demand-side** retention
+> responsibility is handed to the Commit Proxies' minimum over their pending batches before the
+> client's coverage is released, and that contribution is held until validation completes or
+> the generation is fenced from influencing a durable decision — while the ordinary
+> `currentVersion − W_commit` bound may still overtake the commit, as it does today. Delays may over-retain; reclamation may precede the last consumer only through
 > explicit recovery or priced-revocation semantics, under the existing `transaction_too_old`
 > contract — never silently.
