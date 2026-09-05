@@ -1451,6 +1451,91 @@ everything the floor adds afterwards.
 | **mixed-version RPC** | **Not covered.** A simulated cluster runs one binary, and restarting tests *replace* the cluster rather than overlapping versions — phase one runs entirely on the old binary, phase two entirely on the new — so no old Commit Proxy ever talks to a new Resolver in this harness. |
 | production | `RetentionFloorDerivedLocally` detects a legacy sender or an absent field **only where the receiver is new**. It cannot observe the opposite direction; a new Commit Proxy talking to an old Resolver increments nothing, because the old Resolver has no such counter. |
 
+**Diagnostics can perturb the simulator's random stream without ever calling it.** Two routes,
+both found by measurement rather than by reading the code:
+
+* **Timing helpers are not clocks.** `Sim2::timer_monotonic()` is `Sim2::timer()`, which walks a
+  synthetic value toward the current time using `deterministicRandom()`
+  (`fdbrpc/sim2.cpp:1018–1023`). Timing anything with it both invents a duration and consumes
+  randomness. `now()` is safe — `Sim2::now()` is `return time` (`:1015`) — and the comment
+  between them says exactly why they differ. `LatencySample`'s constructor is the same hazard by
+  another route: five `randomUniqueID()` draws each (`fdbrpc/Stats.cpp:230–234`), paid merely by
+  holding one.
+* **Volume feeds back.** Registering a counter lengthens every event of its collection; that
+  moves where trace files roll; and opening a trace file draws six values
+  (`flow/Trace.cpp:311–316`). A diagnostic that touches nothing random still shifts the stream
+  through the size of what it prints.
+
+**The rule:** time-based cost metrics and volumetric diagnostics are enabled only outside
+simulation. Simulation keeps plain counters, whose construction and increment draw nothing, and
+which are built identically whether the feature is on or off.
+
+**The instrument for checking this is the end-of-run unseed** (`fdbserver.cpp:2423`), a draw from
+the same stream after the workload; `deterministicRandom()` is one thread-local stream shared by
+every simulated process, so it is a global barrier. Trace-event fingerprints are not a
+substitute: two identical runs of seed 101 differed by six events, so that oracle measures noise.
+The order that makes an unseed comparison mean something is off/off, then on/on, then off/on —
+and a control that a knob override at its own default value does not itself move the number.
+
+**Step 5's simulation evidence**, on `6946f60646`, `tests/fast/CycleTest.toml`, buggify on,
+counted per sequencer instance and then summed. One observation per request on the intended path,
+`ShadowCommitSourceObservations` against `GetCommitVersionRequests` and
+`ShadowGrvSourceObservations` against `GetLiveCommittedVersionRequests`:
+
+| Seed | Sequencers | Commit | GRV | `Severity=40` |
+|---|---|---|---|---|
+| 101 | 4 | 1595 / 1595 | 3810 / 3810 | 0 |
+| 202 | 5 | 417 / 417 | 1243 / 1243 | 0 |
+| 303 | 5 | 750 / 750 | 5041 / 5041 | 0 |
+
+The commit-side equality is **observed, not structural**: `getCommitVersionRequests` counts the
+early returns too — invalid proxy, duplicate request number, already-acknowledged request — and
+the shadow counter does not, so equality says those branches did not fire in these runs, not that
+they are covered. The GRV-side equality is structural: both increments sit in the same
+straight-line block.
+
+**Step 5's real-cluster evidence**, `configure new single memory` on 127.0.0.1, CycleTest as
+client load, one sequencer, 43 `MasterMetrics` samples. This is the only place the latencies and
+the five aggregates exist at all.
+
+| Check | Result |
+|---|---|
+| `ShadowCombinedAggregate == min(commit, grv)` | 43 / 43 samples, no violation |
+| Presence states observed | `(0,0)` before the first request, then `(1,1)` |
+| `ShadowCommitTransitionLatency` | 9159 samples, mean 90 ns, max 12.6 µs |
+| `ShadowGrvTransitionLatency` | 25118 samples, mean 88 ns, max 4.3 µs |
+| Knob off | none of the seven diagnostics registered; the two plain counters exist, built unconditionally, and stay at `0 -1 0` — nothing observed, nothing aggregated |
+
+Tens of nanoseconds is the plausible magnitude for updating a one-entry map and reducing over it,
+and it is the first honest number this step has produced: the simulated figures were three orders
+of magnitude larger and were an artifact of `Sim2::timer()`. It prices a **single** source; the
+reduction is linear in sources, so this is a floor on the cost, not an estimate for a real
+cluster's proxy count. The GRV entry count is also an undercount of sources by construction,
+since the provisional key is a process address — co-located actors collapse into one entry.
+
+**Applied to step 5**, on `6946f60646`: off/off stable, on/on stable, an unrelated override at
+default neutral, and then on ≡ off on every seed — 101: 96128, 202: 28669, 303: 14318 — each
+matching that seed's knob-off baseline. Bisected against that baseline, the per-source map, the
+aggregation and the two plain counters hold 96128; registering the five aggregate
+`specialCounter`s alone moved it to 84630. Equal unseed proves the stream ends in the same
+state, not that every decision in between was identical; together with the static audit of the
+reachable closure and Sim2's determinism it is sufficient here, and it is not a proof.
+
+**Read the third token of a counter field.** `Traceable<ICounter*>` prints
+`"rate roughness value"` (`fdbrpc/include/fdbrpc/Stats.h:72`); a `SpecialCounter` has no rate and
+prints the bare value. Taking the first token yields the instantaneous rate, which for a
+numerator and a denominator parsed the same way still compares like with like but is not a count.
+
+**What each instrument can and cannot show for step 5:**
+
+| Property | Where it is established |
+|---|---|
+| Cardinality — one observation per request, on the intended path | Simulation, from the two plain counters |
+| Reduction, presence, retirement, revision | Unit tests |
+| Transition latency, and the five aggregates | **Real cluster only** — both are gated on `!isSimulated()` |
+| Nothing functional consumes the values | Static: every reference is a write, a `specialCounter` lambda, or a test |
+| The observations are not demand | By construction; they are placeholders until steps 6–7 supply producers |
+
 **Histograms are not observable in simulation, and that is a property of the harness.**
 `GetHistogramRegistry()` resolves against `g_network->global(INetwork::enHistogram)`
 (`Histogram.cpp:33–41`), so the registry is per-network; under Sim2 each simulated process has
