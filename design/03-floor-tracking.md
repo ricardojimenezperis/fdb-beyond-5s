@@ -433,8 +433,8 @@ already makes and awaits, so it runs unconditionally. Four values must be distin
 - the **exact minimum over the survivors** of the `F` filter, which is what enters the proxy's
   pending-batch deque and governs future raises. It is not `p`.
 
-Only batches that lower the installed contribution mutate the reduction; every batch pays the
-cheap check:
+Only batches that **create** an absent contribution or **lower** a present one mutate the
+reduction; every batch pays the cheap check:
 
 ```
 p = proposedBatchMinimum          // min read_snapshot over the transactions in the batch
@@ -450,6 +450,13 @@ if (!source.minimum.present() || I < C) source.minimum = I    // the first one a
 reply carries F and installedProxyMinimum;
 afterwards the proxy rejects individually every transaction with read_snapshot < F
 ```
+
+When one request carries both a pending raise and a new batch's admission, the raise is resolved
+first — compare, then advance the revision if accepted — and the admission always runs against
+the resulting state, advancing the revision again; the reply carries the revision after the
+admission. Admitting first would take the revision past the raise's `expectedRevision` and make
+every piggybacked raise invalidate itself, so under continuous traffic raises would never
+converge on the busiest sources.
 
 **Every batch runs the transition; there is no local fast path.** A proxy's copy of the
 installed minimum can be stale in the one direction that matters: if it holds 100 while the

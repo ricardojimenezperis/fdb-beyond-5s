@@ -305,9 +305,9 @@ processed the authority admits a batch with `p = 150`, covered by `C = 100`; the
 then installs 200 and leaves that batch uncovered. Discarding a late acknowledgement at the
 proxy does not help: the *authority* must refuse to apply it.
 
-A per-source revision closes it, advanced by **every** admission transition — including those
-where the value was left unchanged, since those are exactly the ones that create newly covered
-work:
+A per-source revision closes it, advanced by **every** accepted transition — including
+admissions that left the value unchanged, since those are exactly the ones that create newly
+covered work:
 
 ```cpp
 struct ProxySourceState {
@@ -350,6 +350,27 @@ breaks convergence. Advancing on every accepted transition makes each compare co
 precondition exactly once.
 
 The lifecycle is then closed: **absent → materialised → lowered → raised → absent.**
+
+**When a retirement rides another batch's request, the retirement goes first.** A
+`GetCommitVersionRequest` can carry both a pending raise with its `expectedRevision` and the
+unconditional admission of the new batch with its `p`. Within the same non-suspending stretch:
+
+1. apply or refuse the raise by compare-and-set;
+2. advance the revision if it was accepted;
+3. **always** run the new batch's admission against the resulting state;
+4. advance the revision again for the admission;
+5. reply with the final revision, bound to the new `localBatchNumber`.
+
+The reverse order is safe but useless. With `revision = 8`, `C = 100`, a raise proposed to 200
+and a new batch with `p = 150`: admitting first takes the revision to 9, so the raise carrying
+`expectedRevision = 8` fails — and every raise transported by a batch invalidates itself, so
+under continuous traffic piggybacked raises never converge and the source over-retains exactly
+where it is busiest. In the stated order the raise installs 200 at revision 9 and the admission
+immediately lowers it to 150 at revision 10, leaving the batch covered.
+
+If the raise was genuinely stale it fails at step 1 and the admission proceeds normally against
+the state in force. Either way the revision returned is the one *after* the admission, which
+correctly forces the proxy to integrate the new batch locally before it may retry.
 
 **The compare alone is not enough: a revision must not become locally usable before its batch is
 in the deque.** The authoritative compare rules out a raise computed *before* an admission the
@@ -400,9 +421,11 @@ This is the symmetric counterpart of running admission unconditionally: no admis
 stale local capability, and no retirement can raise the contribution above work admitted after it
 was computed.
 
-**One revision per source, and only one.** It is advanced by every authoritative admission,
-returned bound to the `localBatchNumber` whose admission advanced it, becomes locally eligible
-only after that batch is integrated into the deque, and guards every raise. It is *not* the
+**One revision per source, and only one.** It is advanced by every accepted authoritative
+transition — admissions, accepted raises, and the retirement that empties the source. Only its
+*eligibility* rule is specific to admission: the revision is returned bound to the
+`localBatchNumber` whose admission advanced it, and becomes locally usable only once that batch
+is integrated into the deque. It guards every raise. It is *not* the
 sequence used to discard stale diagnostic acknowledgements
 (`{proxyGeneration, publicationSequence, coveredThroughBatch}`, §4a) — that one orders
 observations, this one is a correctness precondition, and conflating them would make a
@@ -1362,6 +1385,9 @@ first materialisations is legitimately zero in any window with no new source:
 * **an old raise after that retirement** — refused by revision, never resurrecting a fixed
   entry behind an empty source;
 * **two reordered raises** — the second one applied invalidates the first one's compare;
+* **a retirement and an admission carried by the same RPC**, with the compare both accepted and
+  refused — the raise must be resolved first and the admission must run regardless, or
+  piggybacked raises invalidate themselves under continuous traffic;
 * a client's commits land on two different proxies — neither proxy sees the other's, and the
   global minimum must still cover both;
 * a successor generation appears while replies from the previous one are still arriving.
