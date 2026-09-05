@@ -443,6 +443,9 @@ F = authoritativeEffectiveFloor   // max(publishedGlobalValidationDemand, curren
 C = source.minimum.present() ? source.minimum.get() : currentVersion   // read at the authority
 I = min(C, max(p, F))                            // computed on every batch; an install never raises
 if (!source.minimum.present() || I < C) source.minimum = I    // the first one always materialises
+                                                              // and retiring the last batch
+                                                              // resets it to absent, never to
+                                                              // currentVersion
 
 reply carries F and installedProxyMinimum;
 afterwards the proxy rejects individually every transaction with read_snapshot < F
@@ -785,6 +788,17 @@ admits the batch with no entry behind it, and when `currentVersion` reaches 110 
 implicit minimum rises with it and strands that batch at 100. Presence is part of the state: the
 first admission always materialises the entry, and the `I < C` suppression is an optimisation
 over an entry that already exists (§4.2a).
+
+The symmetric operation closes the cycle. When the last pending batch retires, the contribution
+becomes **absent** — not `currentVersion`, which would re-create the same defect one step later
+as a fixed value pinning retention while the source is idle, and not a deleted record, since the
+revision that refuses late messages must outlive the contribution. So the authoritative state
+separates identity from presence permanently: a persistent `revision` and an `Optional` minimum.
+The revision advances on every *accepted* transition — admissions, accepted raises, and the
+retirement that empties the source — so that each compare consumes its precondition exactly once;
+otherwise two retirements sharing a revision may reorder, and a delayed raise resurrects a fixed
+entry behind a source with no pending work, over-retaining for as long as it stays idle. The
+lifecycle is **absent → materialised → lowered → raised → absent**.
 
 Register-before-use (§3) and handoff-before-release (§4a) jointly make this safe: every
 consumer is covered first by a client registration and, after commit acceptance, by an

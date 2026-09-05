@@ -310,18 +310,46 @@ where the value was left unchanged, since those are exactly the ones that create
 work:
 
 ```cpp
+struct ProxySourceState {
+    uint64_t revision;            // persists across the whole lifecycle
+    Optional<Version> minimum;    // absent means "no contribution", not currentVersion
+};
+
 // admission at the authority, on every batch
-read F, sourceRevision;
-C = source.minimum.present() ? source.minimum.get() : currentVersion;
+read F;
+C = state.minimum.present() ? state.minimum.get() : currentVersion;
 I = min(C, max(p, F));
-if (!source.minimum.present() || I < C) source.minimum = I;
-++sourceRevision;                       // always, even when the value is unchanged
-reply { F, I, sourceRevision, localBatchNumber };
+if (!state.minimum.present() || I < C) state.minimum = I;
+++state.revision;                       // always, even when the value is unchanged
+reply { F, I, state.revision, localBatchNumber };
 
 // raise at the authority, on retirement
-apply only if expectedSourceRevision == sourceRevision;   // else refused, replying
-                                                          // with the current revision
+conditionalRaise(expectedRevision, newMinimum /* or noPendingBatches */):
+    if (expectedRevision != state.revision)
+        return Rejected(state.revision);
+    if (noPendingBatches) state.minimum.reset();   // NOT state.minimum = currentVersion
+    else                  state.minimum = newMinimum;
+    ++state.revision;                              // every accepted transition
+    return Applied(state.revision);
 ```
+
+**Retirement of the last batch restores absence — the symmetric operation to materialisation.**
+Writing `currentVersion` there would re-create the same defect the first admission avoids, one
+step later: a fixed value that stops following the version and pins retention for as long as the
+source stays idle. Deleting the record entirely is the opposite error — the revision is what
+rejects late messages, so it must outlive the contribution. Hence identity and presence are
+separated permanently: `revision` persists, `minimum` is `Optional`.
+
+**The revision advances on every *accepted* transition, not only on admissions.** Every
+admission advances it, every accepted raise advances it, and the retirement that empties the
+source advances it while leaving `minimum` absent. If an accepted raise left the revision alone,
+two retirements sharing a revision could reorder: the later one empties the source, the earlier
+and delayed one still passes the compare, and it resurrects a fixed entry with no pending work
+behind it — an idle source over-retaining indefinitely. That is not under-retention, but it
+breaks convergence. Advancing on every accepted transition makes each compare consume its
+precondition exactly once.
+
+The lifecycle is then closed: **absent → materialised → lowered → raised → absent.**
 
 **The compare alone is not enough: a revision must not become locally usable before its batch is
 in the deque.** The authoritative compare rules out a raise computed *before* an admission the
@@ -810,6 +838,8 @@ batchContributionLifetime = floorRetirementTime − batchFloorAdmissionTime
 loweringInstallLifetime   = floorRetirementTime − conditionalInstallAckTime
 fraction of batches that create or lower a contribution      // who actually mutates the reduction
 first admissions materialising an absent contribution        // must never be suppressed
+retirements returning a source to absent                     // must match sources going idle
+time a source spends present with an empty deque             // the over-retention this prevents
 duration added to the authority's non-suspending stretch
 exactSurvivorMinimum − installedProxyMinimum                 // deferred-raise over-retention
 raises refused by the revision CAS                           // resent after integrating the prefix
@@ -1320,6 +1350,18 @@ Handoff boundary (§10):
 * a batch retires whose entry already left the deque through `pop_back` — the minimum must
   not change;
 * the FIFO retirement assertion — a test that must never fire;
+
+Source-state lifecycle (§4.2a) — four cases the load tests cannot reach, since the counter of
+first materialisations is legitimately zero in any window with no new source:
+
+* **first admission with `p == currentVersion`** — materialises an entry that then stays fixed
+  as the version advances, rather than writing nothing and letting the implicit minimum follow
+  `currentVersion` away from the pending batch;
+* **retirement of the last batch** — turns the contribution absent, so the reduction follows
+  `currentVersion` again instead of pinning at the value current when the source went idle;
+* **an old raise after that retirement** — refused by revision, never resurrecting a fixed
+  entry behind an empty source;
+* **two reordered raises** — the second one applied invalidates the first one's compare;
 * a client's commits land on two different proxies — neither proxy sees the other's, and the
   global minimum must still cover both;
 * a successor generation appears while replies from the previous one are still arriving.
