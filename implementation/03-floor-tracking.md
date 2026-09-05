@@ -1560,10 +1560,15 @@ behaviour-neutral, which is what lets a reviewer accept one without accepting th
    Names say what the values are, since they will outlive this step:
    `shadowCommitSourceObservation` and `shadowGrvSourceObservation` for the inputs, and
    `shadowCommitAggregate`, `shadowGrvAggregate`, `shadowCombinedAggregate` for the synthetic
-   results — *aggregate*, never *demand*. The commit-side observation is real
-   (`batchOldestReadSnapshot`); **the GRV-side one is a structural placeholder**: with no client
-   registrations there is nothing to observe, so it carries `liveCommittedVersion`, which does
-   **not** approximate retention demand and must never be read as if it did. An idle source can
+   results — *aggregate*, never *demand*. **Both observations are structural placeholders at
+   this step**, because neither producer exists yet: the commit-side one becomes real
+   (`batchOldestReadSnapshot`) only in step 7, when the proxy sends it, and until then it
+   carries `rep.prevVersion`, which has the shape of a per-source minimum and none of its
+   meaning. The GRV-side one is a placeholder in a stronger sense and stays one through step 6:
+   with no client registrations there is nothing to observe at all, so it carries
+   `liveCommittedVersion`, which does **not** approximate retention demand and must never be
+   read as if it did. The GRV source identity comes from the reply endpoint, since
+   `GetRawCommittedVersionRequest` carries none and a dark step adds no wire field. An idle source can
    also leave its entry stale until the generation's cleanup — tolerable only because nothing
    consumes it, and one more reason the step stays dark.
 6. **F2** — incarnation IDs, leases, renewal, expiry, administrative limits, and the
