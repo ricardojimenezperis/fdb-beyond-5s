@@ -1502,18 +1502,25 @@ the five aggregates exist at all.
 |---|---|
 | `ShadowCombinedAggregate == min(commit, grv)` | 43 / 43 samples, no violation |
 | Presence states observed | `(0,0)` before the first request, then `(1,1)` |
-| `ShadowCommitTransitionLatency` | 9159 samples, mean 90 ns, max 12.6 µs |
-| `ShadowGrvTransitionLatency` | 25118 samples, mean 88 ns, max 4.3 µs |
+| `ShadowCommitTransitionLatency` | 9144 samples, mean 102 ns |
+| `ShadowGrvTransitionLatency` | 24946 samples, mean 110 ns |
+| `ShadowEmptyBracketLatency` (temporary, removed after measuring) | 9144 samples, mean **20 ns** |
+| → the map update and the reduction, one source | **≈ 82 ns** commit, **≈ 90 ns** GRV |
 | Knob off | none of the seven diagnostics registered; the two plain counters exist, built unconditionally, and stay at `0 -1 0` — nothing observed, nothing aggregated |
 
 Tens of nanoseconds is the plausible magnitude for updating a one-entry map and reducing over it,
 and it is the first honest number this step has produced: the simulated figures were three orders
-of magnitude larger and were an artifact of `Sim2::timer()`. Two things it is not. It is the cost
-of the **instrumented span, the two `timer_monotonic()` reads included**, not of the map and the
-reduction alone; an empty bracket measuring nothing but the two reads would separate the base,
-and until that is run the figure is an upper bound on the work. And it prices a **single**
-source: the reduction is linear in sources, so this is a floor on the per-transition cost for a
-real proxy count. The GRV entry count is also an undercount of sources by construction,
+of magnitude larger and were an artifact of `Sim2::timer()`. The empty bracket — the same two
+`timer_monotonic()` reads with nothing between them — decomposes it: the instrument is about a
+fifth of what the span measures, leaving roughly 82 ns of actual work.
+
+Two caveats on the figure. `timer_monotonic()` is quantised at about 119 ns on this host: the
+median of every one of these samples is 0 and the maxima are multiples of that quantum, so no
+individual measurement is meaningful. Under random phase the *mean* over thousands of samples
+still estimates the duration, which is why only means are quoted. And it prices a **single**
+source; the reduction is linear in sources, so this is a floor on the per-transition cost at a
+real proxy count. The GRV source count is likewise a count of **process addresses**
+(`ProvisionalGrvProcessKey`), not of GRV sources — co-located actors collapse into one entry. The GRV entry count is also an undercount of sources by construction,
 since the provisional key is a process address — co-located actors collapse into one entry.
 
 **Applied to step 5**, on `6946f60646`: off/off stable, on/on stable, an unrelated override at
@@ -1578,14 +1585,18 @@ the 114 were *entirely* from bootstrap. The per-instance time series does not su
 **105 of the 114** precede any sweep at all — and then the counter freezes for the rest of each
 instance's life. The remaining **9** (one in seed 202, eight in seed 303) fall inside the same
 five-second logging interval in which the first sweeps ran, so at this granularity their order
-relative to the first sweep is simply not resolvable. What the series does establish is the part
-that matters: after that first interval, no instance skips again. That is the **bootstrap
-clamp**, not steady-state repetition: while
-`req.version` is still below `MAX_WRITE_TRANSACTION_LIFE_VERSIONS` the raw floor is negative,
-clamps to zero, and matches an `oldestVersion` still at zero. **No steady-state baseline was
-observed**, so the plateau signal is the counter's *increment* once the effective floor has
-first risen above zero — `Δ ConflictSetSweepsSkippedFloorUnchanged` — never its absolute value,
-which starts contaminated.
+relative to the first sweep is simply not resolvable. What the series does establish is that no skip
+occurs after that first interval at all.
+
+So, precisely: **105 skips are proven to precede any sweep; the remaining nine are confined to
+the first reporting interval but cannot be ordered against its first sweeps; no skip was
+observed after that interval, so there is no steady-state baseline.** These observations are
+*consistent with* the bootstrap clamp — while `req.version` is still below
+`MAX_WRITE_TRANSACTION_LIFE_VERSIONS` the raw floor is negative, clamps to zero, and matches an
+`oldestVersion` still at zero — but they do not attribute all 114 events to it. Because no
+steady-state baseline was observed, the plateau signal is the counter's *increment* once the
+effective floor has first risen above zero — `Δ ConflictSetSweepsSkippedFloorUnchanged` — never
+its absolute value, which starts contaminated.
 
 A report is a flush that had samples, not a transaction: `writeToLog()` clears the buckets
 when it emits (`Histogram.cpp:137`) and skips the event entirely when empty (`:98–100`), so
