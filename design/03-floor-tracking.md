@@ -440,9 +440,9 @@ cheap check:
 p = proposedBatchMinimum          // min read_snapshot over the transactions in the batch
 F = authoritativeEffectiveFloor   // max(publishedGlobalValidationDemand, currentVersion − W_commit)
 
-C = authoritativeInstalledProxyMinimum(source)   // read at the authority, not sent by the proxy
+C = source.minimum.present() ? source.minimum.get() : currentVersion   // read at the authority
 I = min(C, max(p, F))                            // computed on every batch; an install never raises
-if (I < C) install(source, I)
+if (!source.minimum.present() || I < C) source.minimum = I    // the first one always materialises
 
 reply carries F and installedProxyMinimum;
 afterwards the proxy rejects individually every transaction with read_snapshot < F
@@ -620,10 +620,11 @@ InstallReply conditionalInstallProxyMinimum(
     // executed by the same authority that publishes the floor, in one non-suspending stretch
     const Version F = max(publishedGlobalValidationDemand,
                           authoritativeCurrentVersion − W_commit);
-    const Version C = authoritativeInstalledProxyMinimum(proxy);  // empty-source value if absent
+    const Optional<Version> installed = authoritativeInstalledProxyMinimum(proxy);
+    const Version C = installed.present() ? installed.get() : authoritativeCurrentVersion;
     const Version I = min(C, max(proposedBatchMinimum, F));
-    if (I < C) {
-        installSourceMinimum(proxy, generation, sequence, I);      // an install never raises
+    if (!installed.present() || I < C) {
+        installSourceMinimum(proxy, generation, sequence, I);      // never raises a present one
     }
     return { F, I };
 }
@@ -776,6 +777,14 @@ source of §4a. Precisely:
   and reclamation stops at `max(r, currentVersion − W_commit)`: at `r` while that commit is
   still inside the ordinary commit window, and once `currentVersion − W_commit` overtakes `r`
   the commit may become too old exactly as today.
+
+That convention computes the reduction; it is **not** a contribution a source can be treated as
+already holding. With nothing installed and `currentVersion = 100`, a batch with `p = 100` and
+`F ≤ 100` gives `C = 100` and `I = 100`; suppressing the write because `I` is not below `C`
+admits the batch with no entry behind it, and when `currentVersion` reaches 110 the source's
+implicit minimum rises with it and strands that batch at 100. Presence is part of the state: the
+first admission always materialises the entry, and the `I < C` suppression is an optimisation
+over an entry that already exists (§4.2a).
 
 Register-before-use (§3) and handoff-before-release (§4a) jointly make this safe: every
 consumer is covered first by a client registration and, after commit acceptance, by an
@@ -1054,8 +1063,7 @@ the batch, so no per-commit collection is added, and the amortised cost of both 
 the retire path is O(1).
 
 The measurable cost is not the reduction but the **coordination rate**: the fraction of
-batches that actually **lower** the installed contribution — `I < C` — and therefore mutate the
-reduction. The round trip and its linearisation exist for every batch already, so what is
+batches that actually **create or lower** a contribution, and therefore mutate the reduction. The round trip and its linearisation exist for every batch already, so what is
 incremental is carrying `p`, reading `C`, computing `F` and `I`, and writing only in that
 fraction. That fraction, the duration added to the authority's non-suspending stretch, and the
 gap between the installed contribution and the exact survivor minimum (which prices deferred

@@ -255,12 +255,33 @@ earlier drafts:
 ```cpp
 // inside the sequencer's atomic stretch, on every batch
 F = authoritativeEffectiveFloor();
-C = authoritativeInstalledProxyMinimum(source);   // empty-source value if absent
+C = source.minimum.present() ? source.minimum.get() : currentVersion;
 I = min(C, max(p, F));
-if (I < C) install(source, I);                    // an install never raises
+if (!source.minimum.present() || I < C)           // an install never raises a present one
+    source.minimum = I;
 
 reply(F, I, publicationSequence);
 ```
+
+**The empty source is not an installed contribution.** `min(∅) = currentVersion` is the right
+convention for *computing* the reduction, and the wrong one to inherit as installed state. If a
+source has nothing installed and `currentVersion = 100`, a batch with `p = 100` and `F ≤ 100`
+yields `C = 100` and `I = 100`; "write only when `I < C`" then writes nothing, the batch is
+admitted, and when `currentVersion` reaches 110 the source's implicit minimum follows it to 110
+and strands a batch pending at 100. Presence is part of the state, and the first admission must
+materialise it:
+
+```cpp
+C = source.minimum.present() ? source.minimum.get() : currentVersion;
+I = min(C, max(p, F));
+if (!source.minimum.present() || I < C)
+    source.minimum = I;                 // the first admission always materialises
+++source.revision;                      // every admission, even when the value is unchanged
+```
+
+The suppression is an optimisation over an *existing* entry, never over an absent one. So the
+statement that only batches with `I < C` mutate the reduction is exact only for a source already
+present: a batch mutates it when it **creates** a contribution or **lowers** an existing one.
 
 and **after the reply** the proxy rejects individually every transaction with
 `read_snapshot < F`, admitting the survivors, which `I` already covers.
@@ -285,15 +306,16 @@ then installs 200 and leaves that batch uncovered. Discarding a late acknowledge
 proxy does not help: the *authority* must refuse to apply it.
 
 A per-source revision closes it, advanced by **every** admission transition — including those
-where `I == C` and nothing was written, since those are exactly the ones that create newly
-covered work:
+where the value was left unchanged, since those are exactly the ones that create newly covered
+work:
 
 ```cpp
 // admission at the authority, on every batch
-read C, F, sourceRevision;
+read F, sourceRevision;
+C = source.minimum.present() ? source.minimum.get() : currentVersion;
 I = min(C, max(p, F));
-if (I < C) install(source, I);
-++sourceRevision;                       // always, even when I == C
+if (!source.minimum.present() || I < C) source.minimum = I;
+++sourceRevision;                       // always, even when the value is unchanged
 reply { F, I, sourceRevision, localBatchNumber };
 
 // raise at the authority, on retirement
@@ -400,8 +422,8 @@ lower than necessary only over-retains.
 
 **What this costs.** The round trip and its linearisation exist for every batch already. The
 increment is: carrying `p` on the request, reading `C` and computing `F` and `I` at the
-authority, and updating the reduction **only when `I < C`** — every batch pays the cheap check,
-few mutate anything. Measuring that increment is what the dark step (§18 step 5) is for.
+authority, and updating the reduction only when the batch **creates** a contribution or
+**lowers** one — every batch pays the cheap check, few mutate anything. Measuring that increment is what the dark step (§18 step 5) is for.
 
 **Acknowledgements carry `{proxyGeneration, publicationSequence, coveredThroughBatch}`, and
 stale ones are discarded**, so a late acknowledgement cannot overwrite a value installed since.
@@ -786,7 +808,8 @@ renewals lost or acknowledged after the client's deadline   // must be visible, 
 size distribution of the monotonic deque
 batchContributionLifetime = floorRetirementTime − batchFloorAdmissionTime
 loweringInstallLifetime   = floorRetirementTime − conditionalInstallAckTime
-fraction of batches that lower the installed minimum         // I < C: who mutates the reduction
+fraction of batches that create or lower a contribution      // who actually mutates the reduction
+first admissions materialising an absent contribution        // must never be suppressed
 duration added to the authority's non-suspending stretch
 exactSurvivorMinimum − installedProxyMinimum                 // deferred-raise over-retention
 raises refused by the revision CAS                           // resent after integrating the prefix
@@ -1027,7 +1050,8 @@ because `F` is known only at the authority and arrives in the reply. So:
 2. **sends `p` as a proposal** on the request it already makes — always, since a local copy of
    the installed minimum can be stale in the direction that matters (§4.2a);
 3. the authority, in one non-suspending transition, computes `F`, reads `C` from its own state,
-   installs `I = min(C, max(p, F))` when `I < C`, and **replies with `F` and `I`**;
+   installs `I = min(C, max(p, F))` when the source is absent or `I < C`, and **replies with
+   `F` and `I`**;
 4. on the reply the proxy **rejects individually** every transaction with `read_snapshot < F`,
    and admits the survivors, which `I` already covers; the batch is never failed wholesale, and
    nothing is retried;
