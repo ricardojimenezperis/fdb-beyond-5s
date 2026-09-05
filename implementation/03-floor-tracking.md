@@ -1445,7 +1445,7 @@ everything the floor adds afterwards.
 
 | Direction | Evidence |
 |---|---|
-| current → current | Simulation on `5ad1f15ac9` (clean tree, binary sha256 `a0e3da67…`), `tests/fast/CycleTest.toml`, seeds 101/202/303, buggify on, all three passing. Counters read **per instance and then aggregated**, never as a maximum across instances. **Resolver**, summed over 17 instances: `RetentionFloorFromRequest` 6704, `RetentionFloorDerivedLocally` 0 on every one of them, `ConflictSetSweepsRun` 6590, `ConflictSetSweepsSkippedFloorUnchanged` 114. **Commit Proxy**, 29 instances: `UnsampleableReadVersions` 0. **GRV proxy**, 19 instances: `ProcessTransportPeers` peaks at 25 — a per-process gauge of transport peers, reported as such and never summed or read as a client count. |
+| current → current | Simulation on `5ad1f15ac9`, `tests/fast/CycleTest.toml`, seeds 101/202/303, buggify on, all three passing. Re-run and re-extracted with `benchmarks/tools/parse-counters.py` from a clean worktree at that commit built in a fresh directory (sha256 `b2db4603…`; the originally published `a0e3da67…` was a different build directory of the same source and no longer exists). Counters read **per instance and then aggregated**, never as a maximum across instances, and taking a counter field's **third** token. **Resolver**, summed over 17 instances: `RetentionFloorFromRequest` 6704 (2472 + 1634 + 2598), `RetentionFloorDerivedLocally` 0 on every one of them, `ConflictSetSweepsRun` 6590, `ConflictSetSweepsSkippedFloorUnchanged` 114. **Commit Proxy**, 29 instances: `UnsampleableReadVersions` 0. **GRV proxy**, 19 instances: `ProcessTransportPeers` peaks at 25 — a per-process gauge of transport peers, reported as such and never summed or read as a client count. |
 | older → current | Unit test: a legacy payload, really deserialized, handed to the real selection function, which takes the fallback branch. |
 | current → older | Unit test: the older peer ignores the unknown field and keeps every field it knows. |
 | **mixed-version RPC** | **Not covered.** A simulated cluster runs one binary, and restarting tests *replace* the cluster rather than overlapping versions — phase one runs entirely on the old binary, phase two entirely on the new — so no old Commit Proxy ever talks to a new Resolver in this harness. |
@@ -1508,9 +1508,12 @@ the five aggregates exist at all.
 
 Tens of nanoseconds is the plausible magnitude for updating a one-entry map and reducing over it,
 and it is the first honest number this step has produced: the simulated figures were three orders
-of magnitude larger and were an artifact of `Sim2::timer()`. It prices a **single** source; the
-reduction is linear in sources, so this is a floor on the cost, not an estimate for a real
-cluster's proxy count. The GRV entry count is also an undercount of sources by construction,
+of magnitude larger and were an artifact of `Sim2::timer()`. Two things it is not. It is the cost
+of the **instrumented span, the two `timer_monotonic()` reads included**, not of the map and the
+reduction alone; an empty bracket measuring nothing but the two reads would separate the base,
+and until that is run the figure is an upper bound on the work. And it prices a **single**
+source: the reduction is linear in sources, so this is a floor on the per-transition cost for a
+real proxy count. The GRV entry count is also an undercount of sources by construction,
 since the provisional key is a process address — co-located actors collapse into one entry.
 
 **Applied to step 5**, on `6946f60646`: off/off stable, on/on stable, an unrelated override at
@@ -1559,7 +1562,8 @@ RetentionFloorFromRequest + RetentionFloorDerivedLocally
     == ConflictSetSweepsRun + ConflictSetSweepsSkippedFloorUnchanged
 ```
 
-6704 + 0 on the left, 6590 + 114 on the right. Every processed request selects exactly one
+6704 + 0 on the left, 6590 + 114 on the right, and it holds **per instance in all 17**, not
+only on the sum. Every processed request selects exactly one
 floor source, every batch yields exactly one sweep opportunity, and that opportunity ends as
 either run or skipped. The `DerivedLocally` term matters even though it is zero here: state the
 identity without it and it stops holding precisely when F2 exercises the fallback. It is *not*
@@ -1567,10 +1571,16 @@ a production assertion — an exception or actor cancellation between the two po
 the accumulators transiently unequal — but it is a strong cross-check that no counters from
 different instances were mixed, which is the mistake it was written to catch.
 
-`ConflictSetSweepsSkippedFloorUnchanged` totalled 114, entirely within four short-lived
-resolvers recruited at startup and during early recoveries; the long-lived ones are at zero,
-and in the one inspected closely the counter had already reached its final value when only 9
-sweeps had run. That is the **bootstrap clamp**, not steady-state repetition: while
+`ConflictSetSweepsSkippedFloorUnchanged` totalled 114, confined to four resolvers from early
+generations; every resolver that outlived them is at zero. An earlier version of this note said
+the 114 were *entirely* from bootstrap. The per-instance time series does not support the
+"entirely": skips accumulate while `ConflictSetSweepsRun` is still 0 — 25, 25, 32 and 23, so
+**105 of the 114** precede any sweep at all — and then the counter freezes for the rest of each
+instance's life. The remaining **9** (one in seed 202, eight in seed 303) fall inside the same
+five-second logging interval in which the first sweeps ran, so at this granularity their order
+relative to the first sweep is simply not resolvable. What the series does establish is the part
+that matters: after that first interval, no instance skips again. That is the **bootstrap
+clamp**, not steady-state repetition: while
 `req.version` is still below `MAX_WRITE_TRANSACTION_LIFE_VERSIONS` the raw floor is negative,
 clamps to zero, and matches an `oldestVersion` still at zero. **No steady-state baseline was
 observed**, so the plateau signal is the counter's *increment* once the effective floor has
