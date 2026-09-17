@@ -69,8 +69,8 @@ A range rewritten in `current` will not require changes to `previous`.
 Checking both lists preserves the required conflict information without
 links between the arenas.
 
-This design limits validation to at most two SkipList searches. It does
-not imply that validation is one comparison per allocator page or that
+Each read-conflict range will require searching at most two
+SkipLists. It does not imply that validation is one comparison per allocator page or that
 searching retained history has no cost for short transactions.
 
 ### 2.2 Reclamation
@@ -132,8 +132,9 @@ When `previous` becomes obsolete:
 - If both arenas are obsolete, both will be reset and the Resolver will
   return to single-arena mode.
 
-An obsolete `current` may also be reset independently while `previous`
-remains required. This does not create another arena or rotate the pair.
+An empty `current` may be reset independently while `previous`
+remains required. Once it contains newer writes, it cannot become
+obsolete before `previous`.
 
 After returning to single-arena mode, the same formation threshold will
 apply again.

@@ -185,13 +185,20 @@ checking `MRVᵢ`.
 ### 3.3 Page identity
 
 Each page allocation or reuse will receive a new identifier from a
-process-wide 64-bit counter. Resetting the Page Directory will not reset
-this counter. Counter exhaustion must fail rather than wrap.
+process-wide 64-bit counter. Resetting the Page Directory will not
+reset this counter. Counter exhaustion must fail rather than wrap.
 
-The counter need not be persisted. A process restart discards the directory,
-historical pages and all outstanding operations, so identifiers from the
-previous process can no longer be referenced.
+If the Page Directory is reset while the process remains running,
+reads using the discarded history must be cancelled or drained
+before the reset completes. The affected shards' minimum retained
+versions must also reflect the history lost.
 
+Unique page identifiers prevent accidental reuse; they do not
+preserve history across a directory reset.
+
+The counter need not be persisted. A process restart discards the
+directory, historical pages and all outstanding operations, so
+identifiers from the previous process can no longer be referenced.
 
 ## 4. Retention limits and resource control
 

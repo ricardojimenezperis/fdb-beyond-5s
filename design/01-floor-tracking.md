@@ -115,9 +115,16 @@ protection for the commit's read version before admitting it.
 
 For each batch, the Commit Proxy will compute the oldest read version
 and send it to the Master through the existing commit-version exchange.
-A commit below the floor already reserved by the Master will be
-rejected with `transaction_too_old`. Protection for admitted commits
-will be installed before validation proceeds.
+With legacy-client support enabled, the admission boundary will
+preserve the ordinary commit window. An empty or newer reported
+minimum will not make otherwise valid commits too old.
+
+With legacy-client support disabled, the boundary will follow the
+floor reserved by the Master. Commits below the applicable boundary
+will be rejected with `transaction_too_old`.
+
+Protection for admitted commits will be installed before validation
+proceeds.
 
 Storage Servers and Resolvers will still check the history they
 actually retain. The Master's admission cannot restore history lost
@@ -204,6 +211,10 @@ current batch reports. Each Commit Proxy will report the minimum
 over its accepted, non-terminal batches.
 
 The Master will combine these contributions into one retention floor.
+With legacy-client support enabled, it will also preserve the ordinary
+read and commit windows when computing that floor. It will not reserve
+an advance beyond either window's oldest supported version.
+
 Individual contributions may move in either direction, but the floor
 reserved by the Master will only advance. New registrations below
 that floor will not acquire protection.

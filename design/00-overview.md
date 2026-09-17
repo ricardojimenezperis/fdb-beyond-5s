@@ -176,8 +176,10 @@ FoundationDB simulation will exercise the integrated system under
 different event orderings, failures and recoveries. Runs must remain
 reproducible.
 
-The full simulation suite must pass. Mixed-version tests will check
-legacy-client support and transitions between retention modes.
+The full simulation suite must pass. Tests will cover both startup
+configurations: legacy-client support enabled and disabled.
+Mixed-version tests will verify protocol compatibility and rejection
+of legacy clients when their support is disabled.
 
 ### 4.3 Storage Server comparison
 
