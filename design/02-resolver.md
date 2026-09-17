@@ -1,100 +1,111 @@
-# Resolver Phase — Generational Paged Conflict Set
+# Resolver design
+
+This document defines how the Resolver will retain conflict history using
+two reusable arenas and a retention floor supplied by the Master.
+
+The retention protocol is specified in `01-floor-tracking.md`.
+
+References to current FoundationDB internals refer to
+`apple/foundationdb` main at `a443d3ee60`.
 
 ## 1. What the Resolver does
 
 The Resolver checks whether a transaction can commit without violating
-serializability. If it detects a conflict, the transaction is aborted. Each transaction
-provides read and write conflict ranges. The Resolver keeps the write conflict
-ranges of committed transactions, together with their commit versions. Read
-conflict ranges are used only to query that history; the Resolver stores no
-database values (`ConflictSet.cpp:997–1050`).
+serializability. If it detects a conflict, the transaction is aborted.
+Each transaction provides read and write conflict ranges. The Resolver
+records write conflict ranges with their commit versions and checks
+incoming read conflict ranges against that history. It stores no database
+values (`ConflictSet.cpp:997–1050`).
 
 For a transaction with read version `r`, the Resolver checks whether a write
-committed after `r` overlaps one of its read conflict ranges. Writes accepted
-earlier in the same batch are included when later transactions are checked.
+after `r` overlaps one of its read conflict ranges. Writes accepted earlier
+in the same batch are included when later transactions are checked.
 Overlapping write ranges alone do not cause a conflict, so two transactions
-that write the same key without reading it may both commit. FoundationDB's rule
-is therefore not simply first-committer-wins.
+that write the same key without reading it may both commit.
 
-Conflict ranges have ordered endpoints, and exact overlap checks require that
-order to be preserved. The current Resolver stores them in a custom skip list.
-It derives the oldest retained version from
-`MAX_WRITE_TRANSACTION_LIFE_VERSIONS` and removes obsolete entries individually
-(`Resolver.cpp:359`, `ConflictSet.cpp:544–576`, `:986–991`).
+The current Resolver stores this history in a custom `SkipList`. It derives
+the oldest retained version from `MAX_WRITE_TRANSACTION_LIFE_VERSIONS`
+and removes obsolete entries individually (`Resolver.cpp:359`,
+`ConflictSet.cpp:544–576`, `:986–991`).
 
-For a transaction spanning several Resolvers, one Resolver may record its write
-ranges even if another Resolver rejects the transaction. The Commit Proxy
-combines their answers and aborts the transaction, but the recorded ranges may
-later cause conservative false conflicts.
+For a transaction spanning several Resolvers, one Resolver may record its
+write ranges even if another rejects the transaction. The Commit Proxy
+combines their answers and aborts the transaction, but the recorded ranges
+may later cause false conflicts. Longer retention may preserve these
+entries for longer. This design will preserve the existing validation
+semantics; changing how global commit outcomes reach Resolvers is outside
+its scope.
 
-This is existing FoundationDB behaviour. Retaining conflict history for longer
-may preserve those false-positive entries for longer, but it cannot allow an
-invalid transaction to commit. The arena-backed representation must preserve
-this behaviour; changing it is outside the scope of this design.
+The proposed design will replace individual deletion with whole-arena
+reclamation. The retention floor will determine when an arena is obsolete,
+and its storage will then be reused without visiting its individual nodes.
 
+## 2. Conflict history in two reusable arenas
 
-This project will preserve the same validation semantics while storing conflict
-history in reusable pages. The retention protocol will determine the oldest
-version still needed. Garbage collection will compare that version with the
-youngest timestamp in the oldest retained page and, when the complete page is
-obsolete, reuse it as a unit. Each garbage-collection step will therefore take
-O(1) time instead of deleting conflict entries one by one.
+The Resolver will retain its existing `SkipList` representation and
+conflict-validation algorithm. Each list will allocate its nodes from a
+separate reusable arena.
 
-## 2. Resolver conflict history in two reusable arenas
+At most two arenas will be active:
 
-The Resolver will continue using its existing `SkipList` and the same conflict-validation rules. 
-The change is how its memory is allocated and reclaimed.
+- `current` receives all new conflict ranges.
+- `previous`, when present, is read-only.
 
-Conflict history will be stored in at most two reusable arenas:
+Within each arena, insertion will maintain a canonical map from keys to
+their latest write versions. When a range is overwritten, obsolete
+interior boundaries will be unlinked but their nodes will not be freed
+individually. Their memory will become reusable when the arena is reset.
 
-* `current` receives all new conflict ranges.
-* `previous`, when present, is read-only and contains the preceding history.
+### 2.1 Validation
 
-Validation will search both arenas and report a conflict if either contains a write newer than the transaction's read version. A range rewritten in `current` does not need to be removed from `previous`: the newer version found across the two arenas takes precedence.
+Validation will check the relevant arenas and report a conflict if either
+contains an overlapping write newer than the transaction's read version.
 
-Within an arena, insertion will preserve the existing canonical `SkipList` representation. Replaced interior nodes will be unlinked but not freed individually. Their memory will be recovered when the entire arena is reused.
+An arena whose highest version is at or below the read version can be
+skipped with one comparison. Otherwise, validation will use the existing
+SkipList range lookup.
 
-Garbage collection will be controlled by the retention floor. An arena is obsolete when:
+A range rewritten in `current` will not require changes to `previous`.
+Checking both lists preserves the required conflict information without
+links between the arenas.
+
+This design limits validation to at most two SkipList searches. It does
+not imply that validation is one comparison per allocator page or that
+searching retained history has no cost for short transactions.
+
+### 2.2 Reclamation
+
+Each arena will record its newest commit version. It will become eligible
+for reclamation when:
 
 ```cpp
 retentionFloor > newestVersionInArena
 ```
 
-At that point every conflict version in the arena is older than every transaction still allowed to commit. The Resolver can therefore reset and reuse the whole arena in O(1), instead of deleting conflict entries one by one.
+Every conflict version in that arena will then be older than the read
+version of any transaction still admitted. The Resolver will reset and
+reuse the arena in O(1), rather than destroy its nodes individually.
 
-The Resolver will operate as follows:
+The reclamation unit will be the entire arena. Nodes may reference other
+nodes within the same arena across allocator-page boundaries, so those
+pages cannot be reclaimed independently.
 
-* With only `current`, an obsolete arena is reset immediately.
-* If a live `current` reaches the configured allocation threshold, it becomes `previous` and the second arena becomes the new `current`.
-* With both arenas present, `previous` remains available until it becomes obsolete. It is then reset and reused as the next `current`.
-* If both arenas are obsolete, both are reset and the Resolver returns to using a single arena.
+A new or reset SkipList must be initialized with a version no greater
+than the retention floor. A higher initial version would make untouched
+keys appear to have been written recently and create false conflicts.
 
-The obsolescence check takes precedence over forming a second arena. History that is already obsolete is reclaimed rather than sealed.
+Resetting an empty arena must be cheap. The allocator must support reuse
+without traversing all previously allocated nodes or pages; its actual
+reset latency will be validated during implementation.
 
-Two conditions are required for correctness:
+### 2.3 Arena formation and rotation
 
-1. A new or reused arena must be initialized with a version no greater than the retention floor. A higher initial version would make untouched keys appear to have been written recently and would create false conflicts.
-2. The allocation threshold must be measured in allocated bytes or pages, not in reachable entries. Unlinked nodes remain in their arena until it is reset.
+The Resolver will start with one writable arena, `current`. A second arena
+will be formed only when required history has accumulated beyond
+`arenaFormationThreshold`.
 
-The two arenas place an upper bound on the number of live generations, but not by themselves on total memory. A long-running transaction can prevent an old arena from being reclaimed while `current` continues growing. Memory usage across both arenas must therefore be accounted for and protected by backpressure.
-
-This design preserves the Resolver's existing validation semantics while replacing entry-by-entry garbage collection with whole-arena reuse.
-
-Conflict entries will remain mutable within each arena. When a range is
-overwritten, the Resolver will continue removing the obsolete boundaries from
-the SkipList so that it remains a canonical map from keys to their latest write
-versions.
-
-Backpressure must be based on the total bytes owned by both live arenas. A
-reachable-entry count is insufficient because unlinked nodes remain allocated,
-while counting only unreachable bytes would miss growth caused by continually
-inserting distinct keys.
-
-### Arena formation and rotation
-
-The Resolver starts with a single writable arena, `current`. Maintaining a second arena is unnecessary while little conflict history has accumulated, because it would add another `SkipList` lookup without providing useful separation.
-
-At each serialized batch boundary, the Resolver evaluates the following conditions in order:
+In single-arena mode, the following checks will run at serialized batch
+boundaries:
 
 ```cpp
 if (retentionFloor > current.newestVersion) {
@@ -107,169 +118,181 @@ if (retentionFloor > current.newestVersion) {
 }
 ```
 
-Obsolescence is checked first. If all history in `current` is already older than the retention floor, the arena is reset and the Resolver remains in single-arena mode. Obsolete history must not be sealed merely because it has reached the formation threshold.
+The reclamation check takes precedence. An obsolete arena will be reset
+even if it has not reached the formation threshold.
 
-Otherwise, the second arena is opened when the memory owned by `current` reaches `arenaFormationThreshold`. The existing arena becomes the read-only `previous` arena, and the second arena becomes the new writable `current`.
+If the arena is still required and reaches the threshold, it will become
+the read-only `previous`. The second arena will become the new `current`.
 
-The threshold is measured in allocated bytes or allocator pages, not in versions or reachable entries. Unlinked nodes remain allocated until their arena is reset, so an entry count would not represent the arena's physical size.
+While both arenas exist, new writes will continue entering `current`.
+When `previous` becomes obsolete:
 
-The threshold has two purposes:
+- If `current` still contains required history, it will become the new
+  `previous`, and the recycled arena will become the new `current`.
+- If both arenas are obsolete, both will be reset and the Resolver will
+  return to single-arena mode.
 
-1. Avoid the additional lookup cost of two `SkipList` instances while the conflict history is small.
-2. Accumulate enough history in an arena to amortize sealing, resetting and reusing it.
+An obsolete `current` may also be reset independently while `previous`
+remains required. This does not create another arena or rotate the pair.
 
-The threshold only decides when the second arena is formed. It does not decide when history is reclaimed. Reclamation is always controlled by the retention floor.
+After returning to single-arena mode, the same formation threshold will
+apply again.
 
-While two arenas exist, all new writes go to `current` and validation searches both. When `previous` becomes obsolete, its arena is recycled. If `current` still contains required history, it becomes the new `previous` and the reset arena becomes the new `current`. If both arenas are obsolete, both are reset and the Resolver returns to single-arena mode.
+### 2.4 Memory accounting
 
-After returning to single-arena mode, the same formation rule applies again: a second arena is not opened until the live `current` arena reaches `arenaFormationThreshold`.
+The formation threshold will be measured in allocated bytes or allocator
+pages. Reachable-entry counts are insufficient because unlinked nodes
+will remain allocated until their arena is reset.
 
-The threshold is a soft target because one batch may take the arena beyond it. It is also distinct from the memory limit: backpressure must use the total bytes owned by both live arenas.
+The threshold will avoid forming a second arena while the history is
+small. It will govern formation only: reclamation will always depend on
+the retention floor. One batch may exceed the threshold, so it will be
+a soft target rather than a strict memory limit.
 
+Two arenas bound the number of generations, not their total size. An old
+transaction may prevent `previous` from being reclaimed while `current`
+continues growing.
 
-### Reclamation unit
-
-The unit of reclamation is an entire arena, not an individual allocator page.
-Nodes in one arena may reference other nodes from the same arena across page
-boundaries, so an individual page cannot be reclaimed independently.
-
-Each arena records the newest commit version written into it. When the
-retention floor is greater than that version, all conflict history in the arena
-is obsolete and the whole arena can be reset in O(1).
-
-Boundary nodes may contain versions older than the arena itself. This is
-expected: those values preserve the canonical map when a written range splits
-an existing region. Reclamation depends only on the newest version in the
-arena, so these older values do not require special handling.
-
+Backpressure must therefore use the total bytes owned by both arenas.
+Counting only unreachable nodes would miss growth from new distinct keys;
+counting only reachable nodes would miss memory retained after overwrites.
 
 ## 3. Implementation sequence
 
-The work will be implemented in two stages.
+The work will proceed in two stages.
 
 ### Phase A: connect the retention floor
 
-The Master will compute the oldest read version that must remain valid from the values reported by GRV Proxies and Commit Proxies. The Resolver will use the installed floor for both transaction admission and conflict-history reclamation.
+The Resolver will consume the floor authorized by the Master for both
+transaction admission and conflict-history reclamation. It will not
+maintain a separate registry of active transactions.
 
-The Commit Proxy must retain its `keyResolvers` history to the same floor. Otherwise, a transaction could be sent to the wrong Resolver even though the required conflict history still exists.
+The Commit Proxy must retain the corresponding `keyResolvers` history.
+Otherwise, retained conflicts could become unreachable because the proxy
+no longer knows which Resolver holds them.
 
-The effective floor depends on the compatibility mode:
+With legacy-client support enabled, retention will preserve at least the
+ordinary validation window. Registered transactions may extend that window
+but will not shorten it.
 
-```cpp
-if (legacyClientsSupported) {
-    effectiveFloor = installedFloor.present()
-        ? std::min(ordinaryFiveSecondFloor, installedFloor.get())
-        : ordinaryFiveSecondFloor;
-} else {
-    effectiveFloor = installedFloor.present()
-        ? installedFloor.get()
-        : currentVersion;
-}
-```
+With legacy-client support disabled, retention will follow the versions
+protected by the Master for live transactions and accepted commits still
+being validated. The admission and activation rules are defined in
+`01-floor-tracking.md`.
 
-When legacy clients are supported, reported transactions may extend retention beyond five seconds but may not shorten the existing window. When legacy clients are disabled, only reported live transactions and accepted commits still being validated retain history.
-
-The floor-tracking protocol is specified separately. The Resolver only consumes the floor installed by the Master; it does not maintain another source of transaction information.
+The applied floor will never retreat. A report cannot restore conflict
+history that has already been reclaimed.
 
 ### Phase B: replace per-entry reclamation
 
-The existing Resolver deletes obsolete conflict entries incrementally. After a long transaction releases an old floor, many entries can become reclaimable at once. The current cleanup budget is tied to subsequent write traffic, so reclaiming that accumulated history may take a long time or require concentrating substantial work in later commit batches.
+The Resolver will move its existing SkipList representation into the two
+reusable arenas described above.
 
-The two-arena design replaces that process. Conflict history remains in the existing `SkipList` representation, but each generation is allocated from a reusable arena. Once the retention floor passes the newest version in an arena, the Resolver resets the whole arena in O(1).
-
-Phase A can be implemented and tested first, but the longer transaction window must not be activated until Phase B is available. Otherwise, releasing history retained by a long transaction could still create a large entry-by-entry cleanup backlog.
-
+This will replace the incremental floor sweep and individual freeing of
+unlinked nodes with whole-arena reuse. Validation semantics and intra-batch
+transaction ordering will remain unchanged.
 
 ## 4. What the measurements established
 
-The original model predicted that replacing entry-by-entry reclamation would substantially increase Resolver throughput. The measurements do not support that prediction.
+The original model predicted a substantial throughput improvement from
+eliminating individual reclamation. The measurements did not support
+that prediction.
 
-In the measured workload, the floor sweep and the interior deletion walk together accounted for approximately 8.4% of conflict-detection time. Conflict lookup accounted for 61.5%. Additional experiments found no workload in which the reclamation savings compensated for the lookup cost of consulting two `SkipList` instances.
+In the measured workload, the floor sweep and interior deletion walk
+accounted for approximately 8.4% of conflict-detection time. Conflict lookup
+accounted for 61.5%. The workload sweeps and lookup-cost analysis did not
+establish a throughput advantage for two SkipLists.
 
-The two-arena design is therefore not proposed as a throughput optimization. Its purpose is to make reclamation predictable when a long transaction releases a large amount of retained conflict history.
+The reason for this design is therefore its reclamation behaviour. When
+old history becomes obsolete, the existing structure must walk and delete
+individual entries. The arena design will make that storage reusable as
+a unit.
 
-With the current structure, reclaiming that history requires walking and deleting individual entries. Progress is also tied to later commit batches and their write volume. A large cleanup backlog can therefore remain for many batches or require more work to be placed on the commit path.
+Implementation measurements will establish:
 
-With the proposed structure, reclamation resets an entire obsolete arena. Its cost no longer depends on the number of conflict entries stored in that arena. The prototype must verify that the allocator provides this operation with effectively O(1) latency.
+- The lookup cost of consulting up to two SkipLists.
+- Memory retained by unlinked nodes.
+- Arena reset and initialization latency.
+- Peak memory while an old arena remains required and the current one grows.
 
-The prototype must measure four costs:
-
-1. The lookup cost of consulting up to two `SkipList` instances.
-2. The memory retained by nodes that have been unlinked but remain allocated until their arena is reset.
-3. The latency of resetting and reinitializing an arena.
-4. Peak memory while an old arena is retained and the current arena continues growing.
-
-The design is acceptable only if these costs remain bounded and predictable. No Resolver throughput improvement is assumed.
-
-Detailed measurements and the withdrawn historical model are kept in `../benchmarks/measurement-results.md`.
-
+No general Resolver throughput improvement is assumed. Detailed benchmark
+methods and results will be published separately.
 
 ## 5. Future wire compression
 
-Conflict ranges must continue travelling from Commit Proxies to Resolvers. Compressing them is independent of the arena-backed reclamation design and is not part of its first implementation.
+Compressing conflict ranges sent from Commit Proxies to Resolvers is
+independent of arena reclamation and is outside the initial implementation.
 
-Ranges are normally sorted within each transaction, but a complete Commit Proxy batch is not globally sorted. Delta encoding could therefore either restart for every transaction or require an additional merge on the commit path. Both options must be measured before selecting a wire format.
+The usual client path sorts ranges within each transaction, but a complete
+Commit Proxy batch is not globally sorted. Per-transaction prefix encoding
+could avoid a global merge; other client paths would still require
+normalization or a fallback.
 
-General-purpose compression may also be evaluated later. Stateful key interning is out of scope for the initial implementation.
-
+Cross-transaction encoding and general-purpose compression may be evaluated
+later. Their network savings must be measured against the CPU and latency
+they add to the commit path. Stateful key interning is out of scope.
 
 ## 6. Alternatives considered
 
 ### Continue deleting entries incrementally
 
-The existing Resolver removes obsolete nodes individually. A more sophisticated controller could make the cleanup budget depend on reclaimable memory or elapsed time instead of subsequent write traffic.
+A controller could allocate cleanup work according to reclaimable memory
+or elapsed time instead of subsequent write volume. This would retain
+per-node traversal and destruction, while adding a policy that balances
+memory recovery against commit latency.
 
-This would preserve the current representation, but reclamation would still require traversing and destroying every obsolete node. It would also introduce a controller that must balance memory recovery against commit latency. The arena design avoids that trade-off by reclaiming a complete generation at once.
+Whole-arena reuse removes that per-node cleanup work.
 
 ### Reclaim individual pages behind a global index
 
-One option was to divide the existing ordered structure into pages and keep a global linked index over them.
+A linked index may reference nodes across page boundaries. A node can also
+remain necessary as the boundary terminating a live range, even when its
+own version is old (`ConflictSet.cpp:560–563`).
 
-This does not permit independent page reclamation. A node in one page may be needed as the predecessor, range boundary or navigation link for a node in another page. The current `removeBefore` implementation already reflects this dependency by retaining a node when either it or its predecessor is still needed (`ConflictSet.cpp:560–563`).
-
-Reclaiming a page would therefore require repairing the global index, making reclamation proportional to the affected structure instead of O(1).
+Independent page reclamation would require repairing those dependencies.
+Separate arenas avoid cross-generation links.
 
 ### Store immutable records and rebuild the index
 
-Another option was to append every conflict-range update as a new immutable record and periodically rebuild a canonical index.
+Appending every update as an immutable range record would retain
+overlapping records rather than a canonical map. The writable generation
+would need an interval index, and sealed generations would require
+compaction or rebuilding.
 
-Without removing superseded boundaries, ranges overlap and validation becomes an interval-overlap query rather than the existing `SkipList` lookup. The writable generation would need an additional interval index even before rebuilding.
-
-The existing insertion algorithm already maintains a canonical map efficiently. Keeping it and reclaiming its arena as a unit avoids both the additional index and the rebuild.
+Mutable SkipLists inside arenas preserve the existing lookup algorithm
+without that additional machinery.
 
 ### Keep redundant links and repair them after reclamation
 
-Redundant pointers could allow navigation to continue after some pages were removed, followed by a sweep that repaired the remaining links.
-
-The repair sweep would again traverse and modify individual nodes after reclamation. This moves the entry-by-entry work rather than eliminating it, so it does not provide O(1) garbage collection.
+Redundant links could support navigation while obsolete pages are removed,
+followed by a repair sweep. That sweep would still visit and modify
+individual nodes, moving rather than eliminating the cleanup work.
 
 ### Interlace the old and current generations
 
-The two generations could be cross-linked so that validation traversed them as one structure instead of performing two independent searches.
+Cross-linking generations could combine their searches, but would
+complicate insertion, rotation and reclamation. Its benefit depends on
+how often reads search both generations. The existing analysis has not
+established enough benefit to justify that complexity.
 
-This would make insertion, rotation and reclamation more complex. It is beneficial only when almost every query needs both generations; the measurements did not show that pattern. Two independent lookups are simpler and keep the arenas completely separable.
+Independent SkipLists keep the arenas separable.
 
 ### Replace the SkipList with an ART or radix tree
 
-A different ordered index could be created inside each arena.
+A different index would require new implementation and validation work.
+It would not change the whole-arena reclamation rule.
 
-This would require implementing and validating a new conflict-index structure without improving the reclamation rule: the arena would still be the unit that becomes obsolete. The existing `SkipList` is already optimized for Resolver range validation, so the initial implementation will retain it.
+The initial implementation will therefore preserve the existing SkipList,
+which already supports ordered conflict-range validation.
 
-
-
-## 8. Status
+## 7. Status
 
 The Resolver design is complete and ready for implementation.
 
-Implementation will proceed in two stages:
+The first stage will connect the Master-authorized retention floor to the
+Resolver and the Commit Proxy's keyResolvers history. The second will
+introduce the two-arena representation.
 
-1. Connect the retention floor installed by the Master to the Resolver and to
-   the Commit Proxy's `keyResolvers` history.
-2. Replace entry-by-entry conflict-history reclamation with the two-arena
-   design.
-
-The two-arena design is intended to provide predictable, effectively O(1)
-reclamation rather than higher general throughput. Measurements performed
-during implementation will validate its lookup cost, memory amplification,
-arena-reset latency and peak memory usage.
-
+The target is predictable O(1) arena reuse. Lookup cost, memory consumption
+and allocator behaviour will be validated during implementation; higher
+general throughput is not assumed.
