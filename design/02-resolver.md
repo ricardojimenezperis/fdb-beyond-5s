@@ -1,299 +1,433 @@
 # Resolver design
 
-This document defines how the Resolver will retain conflict history using
-two reusable arenas and a retention floor supplied by the Master.
-
-The retention protocol is specified in `01-floor-tracking.md`.
-
-References to current FoundationDB internals refer to
+The baseline for the existing FoundationDB internals described here is
 `apple/foundationdb` main at `a443d3ee60`.
+
+This document defines capacity-driven conflict history in a shared page pool.
+`PagedBTreeConflictSet` stores disjoint intervals in a B+ tree. Short separator
+keys are stored inline; longer keys are represented by prefixes and pointers
+to immutable heap records containing the full keys. The main feature is O(1)
+reclamation of storage holding old conflict information. Much of the design
+and optimization effort focuses on cache efficiency, which is crucial to
+competitive performance.
 
 ## 1. What the Resolver does
 
-The Resolver checks whether a transaction can commit without violating
-serializability. If it detects a conflict, the transaction is aborted.
-Each transaction provides read and write conflict ranges. The Resolver
-records write conflict ranges with their commit versions and checks
-incoming read conflict ranges against that history. It stores no database
-values (`ConflictSet.cpp:997–1050`).
+The Resolver checks read-conflict ranges against accepted writes. For a
+transaction at read version `r`, an overlapping write with a CV strictly greater
+than `r` causes a conflict. Overlapping writes alone do not cause a conflict.
+Explicit client conflict ranges retain their semantics regardless of mutation
+type.
 
-For a transaction with read version `r`, the Resolver checks whether a write
-after `r` overlaps one of its read conflict ranges. Writes accepted earlier
-in the same batch are included when later transactions are checked.
-Overlapping write ranges alone do not cause a conflict, so two transactions
-that write the same key without reading it may both commit.
+For any key, only its latest write CV is needed for this check: if an older
+write is newer than `r`, the latest write is also newer than `r`. Overwriting a
+region can therefore replace its older conflict entries without losing a conflict
+at any admitted RV. 
 
-The current Resolver stores this history in a custom `SkipList`. It derives
-the oldest retained version from `MAX_WRITE_TRANSACTION_LIFE_VERSIONS`
-and removes obsolete entries individually (`Resolver.cpp:359`,
-`ConflictSet.cpp:544–576`, `:986–991`).
+`validationMinRV` is the local availability cutoff. It never decreases and must
+advance before discarded history becomes inaccessible. Transactions with
+read-conflict ranges and an RV below it receive `transaction_too_old`; an RV
+equal to it remains admissible. Writes with a CV at or below it cannot conflict
+with an admitted read. Transactions without read-conflict ranges remain exempt
+from this age check.
+On recovery, each new Resolver initializes `validationMinRV` to
+`recoveryTransactionVersion`.
 
-For a transaction spanning several Resolvers, one Resolver may record its
-write ranges even if another rejects the transaction. The Commit Proxy
-combines their answers and aborts the transaction, but the recorded ranges
-may later cause false conflicts. Longer retention may preserve these
-entries for longer. This design will preserve the existing validation
-semantics; changing how global commit outcomes reach Resolvers is outside
-its scope.
+Retention is capacity-driven, without client leases or a global minimum-RV
+protocol. Idle time alone does not discard history. Commit Proxy routing and
+Storage Server availability have their own boundaries.
 
-The proposed design will replace individual deletion with whole-arena
-reclamation. The retention floor will determine when an arena is obsolete,
-and its storage will then be reused without visiting its individual nodes.
+For a transaction spanning several Resolvers, writes accepted locally may remain
+recorded even if another Resolver rejects the transaction, as in current FDB.
+The conservative false conflicts that can result from this behaviour are preserved.
 
-## 2. Conflict history in two reusable arenas
+## 2. Paged temporal conflict history
 
-The Resolver will retain its existing `SkipList` representation and
-conflict-validation algorithm. Each list will allocate its nodes from a
-separate reusable arena.
+### 2.1 One B+ tree of disjoint intervals
 
-At most two arenas will be active:
+`PagedBTreeConflictSet` owns the shared `PagePool`, `TemporalHeap`, B+ node
+allocator, index and local validation boundary. Point and range writes share one
+index. A point denotes `[key, keyAfter(key))`, with compact successor encoding.
+Indexed intervals are disjoint; gaps contain no retained relevant write. Expired
+entries can remain physically present, but expiry must be checked before key
+access or conflict evaluation.
 
-- `current` receives all new conflict ranges.
-- `previous`, when present, is read-only.
+| Field | Meaning |
+|---|---|
+| Begin reference and inline prefix | Inclusive start, possibly resolved from a heap record |
+| End reference and inline prefix | Independent exclusive end; may have another source record |
+| Interval CV | Version of the represented write |
+| Key-order permutation | Logical order of occupied physical entry slots |
+| Child link and separator metadata | Internal B+ node routing |
+| Node `maxCV` | Conservative upper bound for retained writes under the node |
 
-Within each arena, insertion will maintain a canonical map from keys to
-their latest write versions. When a range is overwritten, obsolete
-interior boundaries will be unlinked but their nodes will not be freed
-individually. Their memory will become reusable when the arena is reset.
+The Resolver already combines accepted writes
+before insertion. The tree receives that ordered input and does not repeat the
+union or add a separate adjacent-equal-CV coalescing pass.
 
-### 2.1 Validation
+### 2.2 Shared capacity and allocation units
 
-Validation will check the relevant arenas and report a conflict if either
-contains an overlapping write newer than the transaction's read version.
-
-An arena whose highest version is at or below the read version can be
-skipped with one comparison. Otherwise, validation will use the existing
-SkipList range lookup.
-
-A range rewritten in `current` will not require changes to `previous`.
-Checking both lists preserves the required conflict information without
-links between the arenas.
-
-Each read-conflict range will require searching at most two
-SkipLists. It does not imply that validation is one comparison per allocator page or that
-searching retained history has no cost for short transactions.
-
-### 2.2 Reclamation
-
-Each arena will record its newest commit version. It will become eligible
-for reclamation when:
+One configured page capacity covers both key storage and B+ nodes.
+`PAGED_RESOLVER_POOL_PAGES` supplies the integrated pool budget;
+`RESOLVER_USE_PAGED_CONFLICT_SET` selects the paged or original history at startup.
+Only the selected history is constructed. Pages are 64 KiB in the measured layout.
+The shared region uses aligned allocation; virtual reservation, physical residency
+and metadata outside the pool must be reported separately.
 
 ```cpp
-retentionFloor > newestVersionInArena
+heapPages + indexPages + freePages == limitPages
 ```
 
-Every conflict version in that arena will then be older than the read
-version of any transaction still admitted. The Resolver will reset and
-reuse the arena in O(1), rather than destroy its nodes individually.
+`PageUse::Heap` and `PageUse::Index` are accounting categories, not independent
+budgets. `freePages` includes unused and returned physical pages. Physical page
+slots can be reused; heap `PageID`s are fresh logical identities.
 
-The reclamation unit will be the entire arena. Nodes may reference other
-nodes within the same arena across allocator-page boundaries, so those
-pages cannot be reclaimed independently.
+The delivered pool first uses returned pages, then its unused-page cursor. On
+exhaustion it asks its owner to reclaim history and retries. The common CV-list
+redesign changes the owner's choice of reclamation candidates; it does not
+introduce a permanent partition, minimum shares or opposite-end growth.
 
-A new or reset SkipList must be initialized with a version no greater
-than the retention floor. A higher initial version would make untouched
-keys appear to have been written recently and create false conflicts.
+A free B+ node in a partly occupied page can serve another B+ allocation. It
+cannot serve as a key page. Once a B+ page is wholly free, remove its node slots
+from allocator free structures before returning the page to the common pool.
+That page can then become a key page. A reclaimed key page can likewise become
+a node page. This transfer remains possible after the initial unused pages have
+all been consumed.
 
-Resetting an empty arena must be cheap. The allocator must support reuse
-without traversing all previously allocated nodes or pages; its actual
-reset latency will be validated during implementation.
+The new age list uses the existing reclamation units: **key pages and individual
+B+ nodes**, with a type tag and two links. It is distinct from allocator free
+lists; unused/free storage is not live conflict history. Releasing a node is
+useful immediately when an insertion needs a node, even if its backing page
+still contains other nodes. Whole-page recovery is needed when the caller needs
+a page, not as an unconditional goal after every node release.
 
-### 2.3 Arena formation and rotation
+### 2.3 Immutable temporal heap and endpoint references
 
-The Resolver will start with one writable arena, `current`. A second arena
-will be formed only when required history has accumulated beyond
-`arenaFormationThreshold`.
+The heap remains append-only on its newest page, with no individual-record free
+list. A new write appends its key bytes and current CV. Existing record bytes are
+never overwritten when indexed intervals are shortened or split.
 
-In single-arena mode, the following checks will run at serialized batch
-boundaries:
+`TemporalHeap` maintains its page chain, monotonically increasing logical page
+IDs, live page mapping, `lastReclaimedPageID` and `reclaimedThroughCV`. Each
+`HistoryPage` has an ID, `usedBytes`, links and a conservative `newestCV` maximum.
+A `HeapRef` resolves a page ID, offset and length; logical IDs are fresh even when
+the same physical page is reused. Lookup indexes `slots_[pageID % slots_.size()]`
+and validates that the ID is live. The modulus is the table capacity, not the
+current number of occupied pages. There is no search through a heap directory.
 
-```cpp
-if (retentionFloor > current.newestVersion) {
-    reset(current);
-    remainInSingleArenaMode();
-} else if (current.ownedBytes >= arenaFormationThreshold) {
-    previous = seal(current);
-    current = openEmptyArena(/* initialVersion <= retentionFloor */);
-    enterTwoArenaMode();
-}
-```
+Records and their full endpoint keys fit inside one 64 KiB page. Record-size
+checks include internally generated endpoints. The page maximum covers the CVs
+of all records on the page. Reclamation advances the boundary to that maximum
+before removing the mapping. Updating a maximum never lowers it.
 
-The reclamation check takes precedence. An obsolete arena will be reset
-even if it has not reached the formation threshold.
+For old `[a,z)@100` overwritten by `[d,m)@200`, the index becomes:
 
-If the arena is still required and reaches the threshold, it will become
-the read-only `previous`. The second arena will become the new `current`.
+| Indexed interval | Begin bytes | End bytes | Interval CV |
+|---|---|---|---:|
+| `[a,d)` | `a` in the old record | `d` in the new record | 100 |
+| `[d,m)` | `d` in the new record | `m` in the new record | 200 |
+| `[m,z)` | `m` in the new record | `z` in the old record | 100 |
 
-While both arenas exist, new writes will continue entering `current`.
-When `previous` becomes obsolete:
+With ordinary heap-backed storage, only the incoming write adds a heap record. 
+Splitting an old interval may require
+an additional index entry, but no copied fragment record or additional key bytes
+in the heap. Old keys remain where they were until their page is reclaimed.
+There is no in-place key-capacity decision and no copying old fragments to recent
+pages merely to change their limits.
 
-- If `current` still contains required history, it will become the new
-  `previous`, and the recycled arena will become the new `current`.
-- If both arenas are obsolete, both will be reset and the Resolver will
-  return to single-arena mode.
+**Endpoint lifetime invariant.** Each interval's endpoint bytes originate in a
+record whose CV is at least the interval CV. Initially the versions are equal.
+Trimming inherits an existing endpoint or takes an endpoint from the newer write,
+while preserving the fragment's CV. Repeated trimming preserves the invariant.
+Before any endpoint page is reclaimed, the boundary reaches at least its source
+record CV and therefore the referencing interval CV. The interval is already
+logically expired before its endpoint bytes can disappear.
 
-An empty `current` may be reset independently while `previous`
-remains required. Once it contains newer writes, it cannot become
-obsolete before `previous`.
+Consequently, endpoint reuse does not pin old pages or raise their maxima to the
+new write CV. A live interval cannot lose one of its endpoint pages under this
+contract. The interval CV is stored in the index, so expiry can be checked before
+resolving either reference. No reference counting or endpoint-repair scan is
+required for this lifetime rule.
 
-After returning to single-arena mode, the same formation threshold will
-apply again.
+The earlier idea of allocating copies of old fragment records is superseded by
+independent endpoint references. New heap records still follow incoming write CV
+order. Creating a new entry for an old fragment does not append an old-CV heap
+record.
 
-### 2.4 Memory accounting
+Inline-only storage is an implemented, disabled-by-default experiment. Keys that
+fit its inline representation need no heap record. The endpoint-lifetime argument
+above governs references that actually use heap bytes; inline keys must remain
+valid through entry movement and node reuse. The pressure regression in §4 is a
+reason to finish reclamation before considering a default change.
 
-The formation threshold will be measured in allocated bytes or allocator
-pages. Reachable-entry counts are insufficient because unlinked nodes
-will remain allocated until their arena is reset.
+Heap backfill remains deferred. Any future placement of newer records into older
+pages must preserve conservative page bounds, temporal ordering and expiry before
+reuse. No backfill policy is part of the current CV-list change.
 
-The threshold will avoid forming a second arena while the history is
-small. It will govern formation only: reclamation will always depend on
-the retention floor. One batch may exceed the threshold, so it will be
-a soft target rather than a strict memory limit.
+### 2.4 Node structure and local reclamation
 
-Two arenas bound the number of generations, not their total size. An old
-transaction may prevent `previous` from being reclaimed while `current`
-continues growing.
+Each node contains a fixed-capacity array of entry slots, an occupancy
+bitmap and a permutation mapping key order to physical slots. 
 
-Backpressure must therefore use the total bytes owned by both arenas.
-Counting only unreachable nodes would miss growth from new distinct keys;
-counting only reachable nodes would miss memory retained after overwrites.
+Leaf entries represent disjoint intervals. Each entry stores its commit
+version, independent begin/end references and inline key bytes. Internal
+entries identify child nodes and store their separators and conservative
+maximum commit versions.
 
-## 3. Implementation sequence
+The permutation orders entries by key without moving the entries
+themselves. Searching accesses slots through this permutation. Inserting
+an entry writes it into a free physical slot and inserts its slot number
+at the appropriate position in the permutation. Removing an entry removes
+its slot number from the permutation and clears its occupancy bit.
 
-The work will proceed in two stages.
+Physical slots are managed circularly. An insertion cursor selects the
+next free slot, wrapping at the end of the array. A reclamation head
+identifies the first occupied slot to examine for local cleanup. Neither
+cursor represents key order.
 
-### Phase A: connect the retention floor
+Before reserving another node, an insertion attempts to reclaim space
+locally using the current `validationMinRV`. In a leaf, it removes expired
+entries from the reclamation head and advances past the freed slots. In
+an internal node, it can remove a child whose conservative `maxCV` is at
+or below that boundary. Cleanup stops at the first head entry that cannot
+be reclaimed. This is a local head pass, not a scan of every slot.
 
-The Resolver will consume the floor authorized by the Master for both
-transaction admission and conflict-history reclamation. It will not
-maintain a separate registry of active transactions.
+Local reclamation frees entry slots without advancing the validation
+boundary. Removing entries does not lower the node's conservative
+`maxCV`. Reclaiming an entire node is a separate operation governed by
+the CV list.
 
-The Commit Proxy must retain the corresponding `keyResolvers` history.
-Otherwise, retained conflicts could become unreachable because the proxy
-no longer knows which Resolver holds them.
+Nodes also store parent links; leaves are doubly linked in key order.
+The CV-list links are stored in external vectors rather than inside
+the nodes.
 
-With legacy-client support enabled, retention will preserve at least the
-ordinary validation window. Registered transactions may extend that window
-but will not shorten it.
+With 16 inline key bytes and a capacity of 23 entries, a node occupies 1,792 bytes,
+and a 64-KiB page holds 36 nodes. Pages assigned to the B+ tree remain
+assigned to it permanently. Freed nodes are reused through the node
+free list; their backing pages are not returned to the key heap.
 
-With legacy-client support disabled, retention will follow the versions
-protected by the Master for live transactions and accepted commits still
-being validated. The admission and activation rules are defined in
-`01-floor-tracking.md`.
+### 2.5 Replacing covered intervals
 
-The applied floor will never retreat. A report cannot restore conflict
-history that has already been reclaimed.
+Incoming writes are processed in nondecreasing CV order. For a new
+interval `[begin,end)@cv`:
 
-### Phase B: replace per-entry reclamation
+1. Locate the first possible overlap, including the interval starting
+   before `begin` if its end exceeds `begin`.
+2. Preserve a left fragment if that interval starts before `begin`.
+   Its new end references the incoming record's begin; its CV is unchanged.
+3. Remove fully covered intervals from the map. Their immutable heap
+   records remain until their pages are retired.
+4. Preserve a right fragment if the last affected interval extends beyond
+   `end`. Its new begin references the incoming record's end; its CV is
+   unchanged.
+5. Insert the incoming interval once, covering the entire new range,
+   including any gaps between old intervals.
 
-The Resolver will move its existing SkipList representation into the two
-reusable arenas described above.
+At most two outer fragments survive. Both may come from the same old
+interval. Touching endpoints alone do not overlap.
 
-This will replace the incremental floor sweep and individual freeing of
-unlinked nodes with whole-arena reuse. Validation semantics and intra-batch
-transaction ordering will remain unchanged.
+For example, `[a,f)@100`, `[h,k)@110`, `[m,z)@120`, overwritten by
+`[d,p)@200`, becomes `[a,d)@100`, `[d,p)@200`, `[p,z)@120`.
 
-## 4. What the measurements established
+Each insertion reserves only the nodes required at its current position.
+An insertion that fits needs none; a split requires a sibling, and
+splitting the root also requires a new root. Reservations are computed
+when needed, rather than filled speculatively before every write.
 
-The original model predicted a substantial throughput improvement from
-eliminating individual reclamation. The measurements did not support
-that prediction.
+Allocation may reclaim history and invalidate the saved insertion
+position. The operation then rechecks pending entries against
+`validationMinRV`, relocates and recomputes its reservation. A pending
+right fragment is retained by value and inserted if still live, even
+when the incoming interval has already been published. Unused
+reservations are returned.
 
-In the measured workload, the floor sweep and interior deletion walk
-accounted for approximately 8.4% of conflict-detection time. Conflict lookup
-accounted for 61.5%. The workload sweeps and lookup-cost analysis did not
-establish a throughput advantage for two SkipLists.
+### 2.6 Conflict lookup and `maxCV`
 
-The reason for this design is therefore its reclamation behaviour. When
-old history becomes obsolete, the existing structure must walk and delete
-individual entries. The arena design will make that storage reusable as
-a unit.
+For a read range `[a,b)` at RV `r`, first reject versions below
+`validationMinRV`. An empty range cannot conflict. Locate the possible
+interval containing `a`, then examine intervals starting before `b`.
+An interval conflicts exactly when:
 
-Implementation measurements will establish:
+- `begin < b`;
+- `end > a`;
+- `intervalCV > r`.
 
-- The lookup cost of consulting up to two SkipLists.
-- Memory retained by unlinked nodes.
-- Arena reset and initialization latency.
-- Peak memory while an old arena remains required and the current one grows.
+Because intervals are disjoint, at most one interval starting before
+`a` can overlap the read. Subtrees whose `maxCV` is at most `r` can
+be skipped.
 
-No general Resolver throughput improvement is assumed. Detailed benchmark
-methods and results will be published separately.
+`maxCV` is a conservative high-water mark. Removing entries or splitting
+a node does not require lowering it. Every internal bound must remain
+at least as large as the CVs represented below it. An overestimate may
+reduce pruning or delay reclamation, but cannot hide a conflict.
 
-## 5. Future wire compression
+Key comparisons use inline bytes first. Only an unresolved comparison
+accesses the full key in the heap. The direct-suffix path resolves the
+entry and full-key address once and resumes comparison after the bytes
+already compared.
 
-Compressing conflict ranges sent from Commit Proxies to Resolvers is
-independent of arena reclamation and is outside the initial implementation.
+An internal node can store a fixed reference prefix of up to 12 bytes,
+computed from its first two live separators. Separators sharing that
+reference store their next K bytes inline; exceptions store their first
+K full-key bytes instead. The reference remains unchanged for the node's
+lifetime, and split siblings inherit it. Comparisons account for the
+reference before using the inline suffix. With K = 16 and a 12-byte
+reference, an internal separator can cover 28 key bytes without accessing
+the heap.
 
-The usual client path sorts ranges within each transaction, but a complete
-Commit Proxy batch is not globally sorted. Per-transaction prefix encoding
-could avoid a global merge; other client paths would still require
-normalization or a fallback.
+Batch lookup can also traverse a single sorted sequence of begin and end
+references. Each reference identifies its original query, whose `endIndex`
+locates its end in the sorted sequence. Separators and query endpoints
+advance together. Traversal frames identify a node and its endpoint
+interval, avoiding copies into per-child query vectors. A shared vector
+tracks queries that remain open across child boundaries, including
+children containing neither endpoint.
 
-Cross-transaction encoding and general-purpose compression may be evaluated
-later. Their network savings must be measured against the CPU and latency
-they add to the commit path. Stateful key interning is out of scope.
+### 2.7 Safe endpoint access and searches in flight
 
-## 6. Alternatives considered
+An interval's CV is checked before either endpoint is dereferenced.
+Its endpoints may refer to different pages and source records. As
+described in §2.3, each endpoint source is at least as new as the interval,
+so an expired source cannot be required by a live interval.
 
-### Continue deleting entries incrementally
+Read processing does not allocate or reclaim history, and the validation
+boundary remains fixed during the read phase. Interleaved searches can
+therefore retain their traversal state for that phase.
 
-A controller could allocate cleanup work according to reclaimable memory
-or elapsed time instead of subsequent write volume. This would retain
-per-node traversal and destruction, while adding a policy that balances
-memory recovery against commit latency.
+Write allocation can reclaim history. Before nodes are recycled, saved
+batch hints are invalidated. Pending insertions must relocate and
+revalidate their CVs and endpoint references before continuing. Cleanup
+must not dereference an expired key merely to locate its node.
 
-Whole-arena reuse removes that per-node cleanup work.
+### 2.8 The CV list
 
-### Reclaim individual pages behind a global index
+A doubly linked list orders key pages and B+ nodes by conservative maximum
+commit version. Its links and bounds are stored in external vectors, with
+one entry per key page and one per B+ node. Nodes also retain their
+`maxCV` for tree traversal.
 
-A linked index may reference nodes across page boundaries. A node can also
-remain necessary as the boundary terminating a live range, even when its
-own version is old (`ConflictSet.cpp:560–563`).
+Writes arrive in nondecreasing CV order. When an object's bound increases,
+its list entry is updated and moved to the tail. An unchanged bound causes
+no movement. Removing old entries does not lower the bound.
 
-Independent page reclamation would require repairing those dependencies.
-Separate arenas avoid cross-generation links.
+On a split, both halves inherit the original conservative bound. The new
+sibling is placed beside the original in temporal order. Merges and
+transfers preserve a bound covering all retained contents and the
+corresponding list position. An object is unlinked before its storage
+is reused.
 
-### Store immutable records and rebuild the index
+The list identifies reclamation candidates directly, without a global
+search through leaves. Reclaiming a node may still require tree
+maintenance: removing parent entries, updating separators and links,
+and collapsing the root where appropriate.
 
-Appending every update as an immutable range record would retain
-overlapping records rather than a canonical map. The writable generation
-would need an interval index, and sealed generations would require
-compaction or rebuilding.
+A reclaimed key page returns to the key-page free list. A reclaimed
+B+ node returns to the node free list. Their memory remains within its
+assigned budget; reclaiming nodes does not release their backing pages
+to the key heap.
 
-Mutable SkipLists inside arenas preserve the existing lookup algorithm
-without that additional machinery.
+### 2.9 Recycling at capacity
 
-### Keep redundant links and repair them after reclamation
+Key pages and B+ pages have permanent ownership. The administrator can
+configure their budgets explicitly. In automatic mode, each side has
+a minimum reserved share, and remaining pages are assigned on demand
+until the pool is exhausted. Assigned pages are never transferred
+between the two uses.
 
-Redundant links could support navigation while obsolete pages are removed,
-followed by a repair sweep. That sweep would still visit and modify
-individual nodes, moving rather than eliminating the cleanup work.
+For an insertion, allocation proceeds as follows:
 
-### Interlace the old and current generations
+1. Attempt local head reclamation at the current `validationMinRV`.
+   If the entry now fits, no additional node is needed.
+2. Obtain any required nodes from the node free list, allocating a
+   B+ page if its budget permits.
+3. If storage is still unavailable, process candidates from the CV list,
+   advancing `validationMinRV` to their conservative bounds before
+   invalidating history.
+4. Retire key pages as whole units and reclaim B+ nodes with the required
+   tree maintenance.
+5. Stop when the requested resource is available, then revalidate and
+   replan the pending insertion.
 
-Cross-linking generations could combine their searches, but would
-complicate insertion, rotation and reclamation. Its benefit depends on
-how often reads search both generations. The existing analysis has not
-established enough benefit to justify that complexity.
+Key-record allocation similarly reuses free key pages or acquires pages
+within its budget before advancing reclamation. A key-page request is
+satisfied by a key page; freeing B+ nodes cannot satisfy it.
 
-Independent SkipLists keep the arenas separable.
+Retiring a key page does not traverse incoming endpoint references.
+O(1) applies to logical retirement of one key page, not to B+ tree
+maintenance or an entire allocation that processes several candidates.
 
-### Replace the SkipList with an ART or radix tree
+If the boundary reaches an incoming write's CV, that write cannot
+conflict with a subsequently admitted read and need not remain stored.
+Expired pending fragments are likewise discarded; still-live fragments
+survive replanning. This does not abort the transaction or alter
+completed validation decisions. Subsequent checks use the advanced
+boundary.
 
-A different index would require new implementation and validation work.
-It would not change the whole-arena reclamation rule.
+Normal capacity pressure advances the boundary and recycles storage.
+It introduces no new per-transaction out-of-space abort.
 
-The initial implementation will therefore preserve the existing SkipList,
-which already supports ordered conflict-range validation.
+### 2.10 Resolver batch processing
 
-## 7. Status
+The integration preserves FDB's batch pipeline:
 
-The Resolver design is complete and ready for implementation.
+1. Check read-conflict ranges against retained history, including local
+   age checks.
+2. Resolve conflicts within the batch in transaction order using
+   `MiniConflictSet`.
+3. Combine accepted writes and insert them at the batch commit version.
+4. Perform cleanup at the batch boundary.
 
-The first stage will connect the Master-authorized retention floor to the
-Resolver and the Commit Proxy's keyResolvers history. The second will
-introduce the two-arena representation.
+Conflict-range reporting, transaction order and the exemption for
+transactions without read-conflict ranges remain unchanged.
+`transaction_too_old` remains distinct from a detected conflict.
+Extended retention does not change serializability semantics.
 
-The target is predictable O(1) arena reuse. Lookup cost, memory consumption
-and allocator behaviour will be validated during implementation; higher
-general throughput is not assumed.
+## 3. Integration and recovery
+
+### 3.1 Commit Proxy routing
+
+Commit Proxies retain the assignment history needed to route conflict
+checks across Resolver reassignments. Routing, pruning and recovery
+rules are specified in [Commit Proxy design](01-commitproxy.md).
+
+### 3.2 Recovery
+
+A new Resolver starts with an empty index and key heap and inherits no
+history or page identities from the previous instance. Its validation
+boundary is initialized as described in §1, before processing recovery
+batches or ordinary requests.
+
+FoundationDB's existing recovery determines the outcome of unfinished
+work. The explicit validation boundary replaces reliance on a fixed-size
+recovery version jump for rejecting older read versions.
+
+### 3.3 Component lifetime and integration
+
+The page pool outlives the heap and node allocator. Tree teardown completes
+before referenced heap storage is released, and CV-list entries are
+detached before their storage is reused.
+
+Extended retention is enabled only after capacity enforcement, validation,
+routing and recovery have been integrated and validated together.
+
+
+## 4. Validation methodology
+
+Component tests compare conflict decisions with an independent
+write-history model and verify interval replacement, endpoint lifetime,
+tree structure and reclamation under memory pressure. Integration tests
+and FoundationDB's deterministic simulation exercise batch processing,
+recovery and failures.
+
+Performance comparisons use FoundationDB's `skiplisttest` to measure
+Resolver batch processing against the original conflict set. Comparisons
+require equivalent retained history, identical conflict decisions and
+no additional `transaction_too_old` rejections. Repeated runs measure
+processing time and per-batch p99 latency on one pinned physical core,
+with its SMT sibling idle and diagnostic counters disabled.
+
+Profiling uses Callgrind (Valgrind) for instruction counts, Linux perf
+for CPU sampling and hardware counters, and AMD IBS for sampled
+memory-access latency and data sources. Read and write phases are
+analysed separately, and profiling runs are separate from timing runs.
+Performance results will be published separately.
