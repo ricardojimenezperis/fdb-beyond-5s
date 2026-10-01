@@ -7,7 +7,7 @@ This document defines capacity-driven conflict history in a shared page pool.
 `PagedBTreeConflictSet` stores disjoint intervals in a B+ tree. Short separator
 keys are stored inline; longer keys are represented by prefixes and pointers
 to immutable heap records containing the full keys. The main feature is O(1)
-reclamation of storage holding old conflict information. Much of the design
+logical reclamation of individual key-heap pages. Much of the design
 and optimization effort focuses on cache efficiency, which is crucial to
 competitive performance.
 
@@ -24,8 +24,9 @@ write is newer than `r`, the latest write is also newer than `r`. Overwriting a
 region can therefore replace its older conflict entries without losing a conflict
 at any admitted RV. 
 
-`validationMinRV` is the local availability cutoff. It never decreases and must
-advance before discarded history becomes inaccessible. Transactions with
+The validation boundary, stored in `validationMinRV`, is the oldest read
+version for which the Resolver retains sufficient conflict history. It never
+decreases and must advance before discarded history becomes inaccessible. Transactions with
 read-conflict ranges and an RV below it receive `transaction_too_old`; an RV
 equal to it remains admissible. Writes with a CV at or below it cannot conflict
 with an admitted read. Transactions without read-conflict ranges remain exempt
@@ -46,7 +47,7 @@ The conservative false conflicts that can result from this behaviour are preserv
 ### 2.1 One B+ tree of disjoint intervals
 
 `PagedBTreeConflictSet` owns the shared `PagePool`, `TemporalHeap`, B+ node
-allocator, index and local validation boundary. Point and range writes share one
+allocator, index and validation boundary. Point and range writes share one
 index. A point denotes `[key, keyAfter(key))`, with compact successor encoding.
 Indexed intervals are disjoint; gaps contain no retained relevant write. Expired
 entries can remain physically present, but expiry must be checked before key
@@ -67,39 +68,30 @@ union or add a separate adjacent-equal-CV coalescing pass.
 
 ### 2.2 Shared capacity and allocation units
 
-One configured page capacity covers both key storage and B+ nodes.
-`PAGED_RESOLVER_POOL_PAGES` supplies the integrated pool budget;
-`RESOLVER_USE_PAGED_CONFLICT_SET` selects the paged or original history at startup.
-Only the selected history is constructed. Pages are 64 KiB in the measured layout.
-The shared region uses aligned allocation; virtual reservation, physical residency
-and metadata outside the pool must be reported separately.
+One configured page pool supplies both the key heap and B+ tree.
+`PAGED_RESOLVER_POOL_PAGES` sets its total capacity. Pages are 64 KiB;
+B+ pages contain multiple nodes. Only the history selected by
+`RESOLVER_USE_PAGED_CONFLICT_SET` is constructed.
 
-```cpp
-heapPages + indexPages + freePages == limitPages
-```
+The administrator can set explicit key and index page budgets. In automatic
+mode, each side has a minimum reserved share, and the remaining pages are
+assigned on demand. Once assigned, a page belongs permanently to that side.
+After all unassigned pages have been consumed, the split is fixed.
 
-`PageUse::Heap` and `PageUse::Index` are accounting categories, not independent
-budgets. `freePages` includes unused and returned physical pages. Physical page
-slots can be reused; heap `PageID`s are fresh logical identities.
+Key pages are reclaimed as whole units and reused by the key heap. B+ nodes
+are reclaimed individually and reused through the node free list. B+ pages
+are never reclaimed, even if all their nodes are free, and neither side
+transfers assigned pages to the other. A workload change can therefore
+exhaust one side while the other has free capacity; explicit budgets allow
+the administrator to choose a split appropriate to the workload.
 
-The delivered pool first uses returned pages, then its unused-page cursor. On
-exhaustion it asks its owner to reclaim history and retries. The common CV-list
-redesign changes the owner's choice of reclamation candidates; it does not
-introduce a permanent partition, minimum shares or opposite-end growth.
+The CV list tracks live key pages and individual B+ nodes. It is separate
+from the allocator free lists. A free node can satisfy a node allocation
+immediately; a key-page allocation requires a free key page.
 
-A free B+ node in a partly occupied page can serve another B+ allocation. It
-cannot serve as a key page. Once a B+ page is wholly free, remove its node slots
-from allocator free structures before returning the page to the common pool.
-That page can then become a key page. A reclaimed key page can likewise become
-a node page. This transfer remains possible after the initial unused pages have
-all been consumed.
-
-The new age list uses the existing reclamation units: **key pages and individual
-B+ nodes**, with a type tag and two links. It is distinct from allocator free
-lists; unused/free storage is not live conflict history. Releasing a node is
-useful immediately when an insertion needs a node, even if its backing page
-still contains other nodes. Whole-page recovery is needed when the caller needs
-a page, not as an unconditional goal after every node release.
+The pool occupies one aligned memory region. Pool capacity, physical
+residency and auxiliary metadata outside the pool are distinct quantities.
+Reusing a physical key-page slot gives it a fresh logical page ID.
 
 ### 2.3 Immutable temporal heap and endpoint references
 
@@ -149,20 +141,13 @@ contract. The interval CV is stored in the index, so expiry can be checked befor
 resolving either reference. No reference counting or endpoint-repair scan is
 required for this lifetime rule.
 
-The earlier idea of allocating copies of old fragment records is superseded by
-independent endpoint references. New heap records still follow incoming write CV
-order. Creating a new entry for an old fragment does not append an old-CV heap
-record.
+New heap records follow incoming write CV order. Creating an index entry
+for an old fragment does not append an old-CV heap record. New records are
+appended only to the newest page; free space in older pages is not backfilled.
 
-Inline-only storage is an implemented, disabled-by-default experiment. Keys that
-fit its inline representation need no heap record. The endpoint-lifetime argument
-above governs references that actually use heap bytes; inline keys must remain
-valid through entry movement and node reuse. The pressure regression in §4 is a
-reason to finish reclamation before considering a default change.
-
-Heap backfill remains deferred. Any future placement of newer records into older
-pages must preserve conservative page bounds, temporal ordering and expiry before
-reuse. No backfill policy is part of the current CV-list change.
+With inline-only storage, keys that fit the inline representation need no
+heap record. The endpoint-lifetime invariant applies to heap-backed
+references; inline key bytes are preserved when entries move between nodes.
 
 ### 2.4 Node structure and local reclamation
 
@@ -431,3 +416,13 @@ for CPU sampling and hardware counters, and AMD IBS for sampled
 memory-access latency and data sources. Read and write phases are
 analysed separately, and profiling runs are separate from timing runs.
 Performance results will be published separately.
+
+## 5. Implementation status
+
+The paged B+ conflict set and capacity-driven reclamation are implemented
+and integrated for testing. Inline-only keys, sorted-endpoint traversal
+and node reference prefixes are optional and disabled by default.
+Full FDB validation of node reference prefixes is in progress.
+
+System-wide routing, recovery and removal of fixed-window limits remain
+prerequisites for enabling extended transactions.

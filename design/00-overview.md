@@ -13,10 +13,10 @@ and secondarily the conflict history needed to validate commits.
 This project addresses these constraints with a new history-storage
 design. Storage Servers will retain old versions in spillable pages,
 allowing history to grow beyond RAM capacity. Whole pages are reclaimed
-in O(1), without visiting individual records. Resolvers retain conflict
-history in a B+ tree of disjoint intervals with O(1) GC. Short keys are
-stored inline in the B+ tree; longer keys are represented by a prefix
-and a pointer to the full key in the key heap.
+in O(1), without visiting individual records. Resolvers will retain conflict
+history in a B+ tree of disjoint intervals with O(1) logical key-page
+reclamation. Short keys will be stored inline in the B+ tree; longer keys
+will be represented by a prefix and a pointer to the full key in the key heap.
 
 Administrative knobs configure the memory and disk capacity allocated
 to old versions on each Storage Server and the memory capacity allocated
@@ -31,21 +31,9 @@ available; otherwise, affected operations return `transaction_too_old`.
 
 ### 1.1 How history is retained and recycled
 
-Each Resolver has a configurable memory budget divided between its key
-heap and B+ tree, either explicitly by the administrator or automatically
-as pages are first allocated, subject to a minimum reserved for each.
-Once assigned, pages remain with their respective heap. B+ tree pages
-contain several nodes. Key pages are reclaimed as a whole; B+ nodes are
-reclaimed individually and reused through a free list. B+ pages are never
-reclaimed or transferred to the key heap.
-
-Intervals have independent begin/end references, which may point to
-different heap records. A doubly linked age list tracks both key pages
-and B+ nodes by conservative maximum commit version. Under capacity
-pressure, reclamation advances the local validation boundary as needed.
-Tree allocations first try local reclamation at the current boundary,
-then the node free list, and finally the age list. Retiring a key page
-does not traverse incoming endpoint references.
+Each Resolver will retain conflict history within a configured memory
+budget. As capacity is needed, it will recycle old key pages and B+ nodes
+and advance its validation boundary. 
 
 Each Storage Server will keep current values in a persisted single-version
 tree and historical versions separately in pages. Two circular arrays,
@@ -61,10 +49,9 @@ old assignments, it will advance its routing-history boundary and reject
 commits requiring information it no longer holds.
 
 Retention does not depend on a global minimum read version, client leases
-or Master coordination. Each component enforces the boundary of its own
-available history. The Resolver field `validationMinRV` denotes its local
-cutoff, not a global retention protocol. These boundaries need not
-coincide: a transaction may successfully read from a Storage Server but
+or Master coordination as in the original design. 
+Each component enforces the boundary of its own
+available history. These boundaries need not coincide: a transaction may successfully read from a Storage Server but
 later receive `transaction_too_old` when committing through a Resolver
 that has already recycled the required conflict history.
 
@@ -107,8 +94,13 @@ current state should avoid historical-version processing.
 
 Component designs:
 
+- [Commit Proxy design](01-commitproxy.md)
 - [Resolver design](02-resolver.md)
 - [Storage Server design](03-storage.md)
+
+The paged Resolver is implemented and integrated for testing. Storage
+Server history and system-wide support for extended transactions remain
+implementation work. The descriptions above specify the intended design.
 
 ## 3. Validation and benchmarking
 
