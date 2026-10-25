@@ -13,10 +13,10 @@ and secondarily the conflict history needed to validate commits.
 This project addresses these constraints with a new history-storage
 design. Storage Servers will retain old versions in spillable pages,
 allowing history to grow beyond RAM capacity. Whole pages are reclaimed
-in O(1), without visiting individual records. Resolvers will retain conflict
-history in a B+ tree of disjoint intervals with O(1) logical key-page
-reclamation. Short keys will be stored inline in the B+ tree; longer keys
-will be represented by a prefix and a pointer to the full key in the key heap.
+in O(1), without visiting individual records. Resolvers retain conflict
+history in a temporal B+ tree of disjoint intervals whose nodes and key
+records share one block pool; history is reclaimed by age, oldest nodes and
+key blocks first, as capacity is needed.
 
 Administrative knobs configure the memory and disk capacity allocated
 to old versions on each Storage Server and the memory capacity allocated
@@ -31,9 +31,9 @@ available; otherwise, affected operations return `transaction_too_old`.
 
 ### 1.1 How history is retained and recycled
 
-Each Resolver will retain conflict history within a configured memory
-budget. As capacity is needed, it will recycle old key pages and B+ nodes
-and advance its validation boundary. 
+Each Resolver retains conflict history within a configured memory
+budget. As capacity is needed, it releases its oldest key blocks and B+
+nodes and advances its validation boundary.
 
 Each Storage Server will keep current values in a persisted single-version
 tree and historical versions separately in pages. Two circular arrays,
@@ -85,7 +85,7 @@ The project covers three areas:
 
 - Local history boundaries and commit routing, including the removal
   of fixed-window checks.
-- Paged conflict history and B+ tree reclamation in Resolvers.
+- Budgeted conflict history in a temporal B+ tree in Resolvers.
 - Spillable historical versions in Storage Servers.
 
 These changes will preserve existing isolation semantics and must be
@@ -98,9 +98,11 @@ Component designs:
 - [Resolver design](02-resolver.md)
 - [Storage Server design](03-storage.md)
 
-The paged Resolver is implemented and integrated for testing. Storage
-Server history and system-wide support for extended transactions remain
-implementation work. The descriptions above specify the intended design.
+The sequential Resolver (v1) is implemented, integrated for testing and
+evaluated against the original skip list under an equal memory budget; its
+milestone snapshot is under [`resolver/v1/`](../resolver/v1/README.md).
+Storage Server history and system-wide support for extended transactions
+remain implementation work. The descriptions above specify the intended design.
 
 ## 3. Validation and benchmarking
 
@@ -119,4 +121,5 @@ will be measured separately.
 
 Runs will be reproducible, with configurations and seeds recorded,
 repeated timings and diagnostic instrumentation disabled for timing.
-Results will be reported separately from the design.
+Results are reported per component milestone, separately from the design;
+the first is [resolver v1](../resolver/v1/06-evaluation.md).

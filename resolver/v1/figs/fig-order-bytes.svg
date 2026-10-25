@@ -1,0 +1,258 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="950" viewBox="0 0 1280 950" font-family="Helvetica, Arial, sans-serif" xmlns:c2pa="http://c2pa.org/manifest"><metadata><c2pa:manifest>AAAWgmp1bWIAAAAeanVtZGMycGEAEQAQgAAAqgA4m3EDYzJwYQAAABZcanVtYgAAAEdqdW1kYzJtYQARABCAAACqADibcQN1cm46YzJwYTo1MTQ0ZTIyNi0wMmZmLTRmOTQtOWQyMy1iY2RlZmM4ZDk3YTYAAAADl2p1bWIAAAApanVtZGMyYXMAEQAQgAAAqgA4m3EDYzJwYS5hc3NlcnRpb25zAAAAALxqdW1iAAAARGp1bWRjYm9yABEAEIAAAKoAOJtxE2MycGEuaW5ncmVkaWVudC52MwAAAAAYYzJzaCaD+BRofRvf2Vbn2qQ+Ud8AAABwY2JvcqNpZGM6Zm9ybWF0bWltYWdlL3N2Zyt4bWxqaW5zdGFuY2VJRHgseG1wOmlpZDplMmI5MDhlNy04MGJmLTRkOGYtOGVkYi1kM2RiNTYwZDY5ZTdscmVsYXRpb25zaGlwaHBhcmVudE9mAAAB4mp1bWIAAABBanVtZGNib3IAEQAQgAAAqgA4m3ETYzJwYS5hY3Rpb25zLnYyAAAAABhjMnNoEwv5FZOKmGqbOB+WtnC/0QAAAZljYm9yomdhY3Rpb25zgqJmYWN0aW9ua2MycGEub3BlbmVkanBhcmFtZXRlcnOha2luZ3JlZGllbnRzgaJjdXJseC1zZWxmI2p1bWJmPWMycGEuYXNzZXJ0aW9ucy9jMnBhLmluZ3JlZGllbnQudjNkaGFzaFggqS3puQfg+Ccgw0eJQ63Y7AcAfs2b1p4+bNRWYaDeYGekZmFjdGlvbngdY29tLmFudGhyb3BpYy5jbGF1ZGUucHJvdmlkZWRqcGFyYW1ldGVyc6F4H2NvbS5hbnRocm9waWMub3JpZ2luLWNvbmZpZGVuY2VndW5rbm93bmtkZXNjcmlwdGlvbnhmQ2xhdWRlIHByb3ZpZGVkIHRoaXMgZmlsZSBhdCB0aGUgcmVxdWVzdCBvZiBhIHVzZXIgYW5kIG1heSBoYXZlIGNyZWF0ZWQgb3IgbW9kaWZpZWQgdGhlIGZpbGUgY29udGVudHMubXNvZnR3YXJlQWdlbnShZG5hbWVmQ2xhdWRlcmFsbEFjdGlvbnNJbmNsdWRlZPUAAADIanVtYgAAAEBqdW1kY2JvcgARABCAAACqADibcRNjMnBhLmhhc2guZGF0YQAAAAAYYzJzaMhe9MsFcoaibV1prJgn49wAAACAY2JvcqVjYWxnZnNoYTI1NmNwYWRNAAAAAAAAAAAAAAAAAGRoYXNoWCBbCz3J4DiA7xD+pb5Kv5RQG1Qk3hCgnoc1QOhhBcA7AmRuYW1lbmp1bWJmIG1hbmlmZXN0amV4Y2x1c2lvbnOBomVzdGFydBjDZmxlbmd0aBkeBAAAAj5qdW1iAAAAJ2p1bWRjMmNsABEAEIAAAKoAOJtxA2MycGEuY2xhaW0udjIAAAACD2Nib3KlY2FsZ2ZzaGEyNTZpc2lnbmF0dXJleE1zZWxmI2p1bWJmPS9jMnBhL3VybjpjMnBhOjUxNDRlMjI2LTAyZmYtNGY5NC05ZDIzLWJjZGVmYzhkOTdhNi9jMnBhLnNpZ25hdHVyZWppbnN0YW5jZUlEeCx4bXA6aWlkOjRhZmE5YTJmLTk3YjUtNGNmNS1iZDU2LTcyODVjYjZkNWM1NHJjcmVhdGVkX2Fzc2VydGlvbnODomN1cmx4LXNlbGYjanVtYmY9YzJwYS5hc3NlcnRpb25zL2MycGEuaW5ncmVkaWVudC52M2RoYXNoWCCpLem5B+D4JyDDR4lDrdjsBwB+zZvWnj5s1FZhoN5gZ6JjdXJseCpzZWxmI2p1bWJmPWMycGEuYXNzZXJ0aW9ucy9jMnBhLmFjdGlvbnMudjJkaGFzaFgg0PEGVX8vv/UhyxW6VBNxgZ+xo7l6wa1sIHEs6UY0XZ+iY3VybHgpc2VsZiNqdW1iZj1jMnBhLmFzc2VydGlvbnMvYzJwYS5oYXNoLmRhdGFkaGFzaFggrSKzIhJXAsAMB7RXYRU0A6d8TYaGRHhD5+O7g0BV1Nl0Y2xhaW1fZ2VuZXJhdG9yX2luZm+jZG5hbWVvQW50aHJvcGljIEZpbGVzZ3ZlcnNpb25lMS4wLjBrc3BlY1ZlcnNpb25lMi40LjAAABA4anVtYgAAAChqdW1kYzJjcwARABCAAACqADibcQNjMnBhLnNpZ25hdHVyZQAAABAIY2JvctKEWQISogEmGCFZAgowggIGMIIBjaADAgECAhRA5aAK7sI50L64g/oGQgU9Z1UTADAKBggqhkjOPQQDAzBJMRcwFQYDVQQKEw5BbnRocm9waWMsIFBCQzEuMCwGA1UEAxMlQW50aHJvcGljIENvbnRlbnQgQ3JlZGVudGlhbHMgUm9vdCBDQTAeFw0yNjA4MDcxODQzNTZaFw0yODA4MDYxOTQzNTZaMEQxFzAVBgNVBAoTDkFudGhyb3BpYywgUEJDMSkwJwYDVQQDEyBBbnRocm9waWMgQ2xhdWRlIENvbnRlbnQgU2lnbmluZzBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABJh6CmvLUBgFFNU0vUKlOVtE6djd17L5SuwX0LemFisBM3dkd/3cyjxFA3Qo5S46fX0/ihY0VZ7mfb9KF703t5OjWDBWMA4GA1UdDwEB/wQEAwIHgDAVBgNVHSUEDjAMBgorBgEEAYPoXgIBMAwGA1UdEwEB/wQCMAAwHwYDVR0jBBgwFoAUzlHiBIFOZFsj+OPEz5o+nMHXXMIwCgYIKoZIzj0EAwMDZwAwZAIwMXMdFJ4BetLLVY7ORuE9noqbbAZOZn/aArXyTwFAZfKrPzxF2vPoJNf1+UCdg1XGAjBwX1zd9WGqYkqmL5SFqw1QySjr1zJfpJM9+1rdDwSPLMOPOjKuiXjoU/pUUeG9RwmhY3BhZFkNngAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPZYQMHeE5LIzFSS+xte6C+ycaKw4SsJ8LAr5+lESyQI2+lOmsvmLcuYigq9hj7a5JtxwpcySqoq77TihrIaQPkg1WY=</c2pa:manifest></metadata>
+<rect width="1280" height="950" fill="#FFFFFF"/>
+<defs><marker id="arr" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,1 L9,5 L0,9 z" fill="#1F2A44"/></marker><marker id="arrO" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,1 L9,5 L0,9 z" fill="#E8731A"/></marker></defs>
+<text x="40" y="44" text-anchor="start" font-size="22" font-weight="700" fill="#1F2A44">Keeping key order: what moves on an insertion or a deletion</text>
+<text x="40" y="68" text-anchor="start" font-size="15" font-weight="400" fill="#5B6578">A conventional node keeps descriptors sorted and shifts them to open or close a gap. V1 keeps descriptors in fixed slots and shifts only the one-byte slot indices of order[].</text>
+<text x="40" y="88" text-anchor="start" font-size="13.5" font-weight="400" fill="#5B6578">Leaf descriptor in v1: RangeRef 24 B + cv 8 B = 32 B. Capacity 8 here; v1 leaves hold 59 entries. Highlighted cells are the bytes written or moved by the operation.</text>
+<text x="130" y="122" text-anchor="start" font-size="15" font-weight="700" fill="#1F2A44">Conventional: sorted descriptor array</text>
+<text x="700" y="122" text-anchor="start" font-size="15" font-weight="700" fill="#1F2A44">V1: fixed slots + occupied bitmap + order[]</text>
+<text x="60" y="158" text-anchor="start" font-size="14" font-weight="700" fill="#1F2A44">Before</text>
+<text x="120" y="195.0" text-anchor="end" font-size="12.5" font-weight="600" fill="#5B6578">entries</text>
+<rect x="130" y="170" width="59" height="40" rx="4" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="159.5" y="195.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">apple</text>
+<rect x="192" y="170" width="59" height="40" rx="4" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="221.5" y="195.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">banana</text>
+<rect x="254" y="170" width="59" height="40" rx="4" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="283.5" y="195.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">cherry</text>
+<rect x="316" y="170" width="59" height="40" rx="4" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="345.5" y="195.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">date</text>
+<rect x="378" y="170" width="59" height="40" rx="4" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="407.5" y="195.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">fig</text>
+<rect x="440" y="170" width="59" height="40" rx="4" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="469.5" y="195.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">grape</text>
+<rect x="502" y="170" width="59" height="40" rx="4" fill="#FFFFFF" stroke="#8A93A6" stroke-width="1" stroke-dasharray="4 3"/>
+<rect x="564" y="170" width="59" height="40" rx="4" fill="#FFFFFF" stroke="#8A93A6" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="130" y="228" text-anchor="start" font-size="12.5" font-weight="400" fill="#5B6578">six entries, sorted in place</text>
+<text x="690" y="195.0" text-anchor="end" font-size="12.5" font-weight="600" fill="#5B6578">slots</text>
+<rect x="700" y="170" width="59" height="40" rx="4" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="729.5" y="195.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">date</text>
+<text x="729.5" y="165" text-anchor="middle" font-size="10.5" font-weight="400" fill="#5B6578">slot 0</text>
+<rect x="762" y="170" width="59" height="40" rx="4" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="791.5" y="195.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">apple</text>
+<text x="791.5" y="165" text-anchor="middle" font-size="10.5" font-weight="400" fill="#5B6578">slot 1</text>
+<rect x="824" y="170" width="59" height="40" rx="4" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="853.5" y="195.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">grape</text>
+<text x="853.5" y="165" text-anchor="middle" font-size="10.5" font-weight="400" fill="#5B6578">slot 2</text>
+<rect x="886" y="170" width="59" height="40" rx="4" fill="#FFFFFF" stroke="#8A93A6" stroke-width="1" stroke-dasharray="4 3"/>
+<rect x="948" y="170" width="59" height="40" rx="4" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="977.5" y="195.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">banana</text>
+<text x="977.5" y="165" text-anchor="middle" font-size="10.5" font-weight="400" fill="#5B6578">slot 4</text>
+<rect x="1010" y="170" width="59" height="40" rx="4" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="1039.5" y="195.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">fig</text>
+<text x="1039.5" y="165" text-anchor="middle" font-size="10.5" font-weight="400" fill="#5B6578">slot 5</text>
+<rect x="1072" y="170" width="59" height="40" rx="4" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="1101.5" y="195.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">cherry</text>
+<text x="1101.5" y="165" text-anchor="middle" font-size="10.5" font-weight="400" fill="#5B6578">slot 6</text>
+<rect x="1134" y="170" width="59" height="40" rx="4" fill="#FFFFFF" stroke="#8A93A6" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="690" y="239.0" text-anchor="end" font-size="12.5" font-weight="600" fill="#5B6578">occupied</text>
+<rect x="716.5" y="220" width="26" height="24" rx="3" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1"/>
+<text x="729.5" y="237.0" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2A44">1</text>
+<rect x="778.5" y="220" width="26" height="24" rx="3" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1"/>
+<text x="791.5" y="237.0" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2A44">1</text>
+<rect x="840.5" y="220" width="26" height="24" rx="3" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1"/>
+<text x="853.5" y="237.0" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2A44">1</text>
+<rect x="902.5" y="220" width="26" height="24" rx="3" fill="#FFFFFF" stroke="#1F2A44" stroke-width="1"/>
+<text x="915.5" y="237.0" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2A44">0</text>
+<rect x="964.5" y="220" width="26" height="24" rx="3" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1"/>
+<text x="977.5" y="237.0" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2A44">1</text>
+<rect x="1026.5" y="220" width="26" height="24" rx="3" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1"/>
+<text x="1039.5" y="237.0" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2A44">1</text>
+<rect x="1088.5" y="220" width="26" height="24" rx="3" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1"/>
+<text x="1101.5" y="237.0" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2A44">1</text>
+<rect x="1150.5" y="220" width="26" height="24" rx="3" fill="#FFFFFF" stroke="#1F2A44" stroke-width="1"/>
+<text x="1163.5" y="237.0" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2A44">0</text>
+<text x="690" y="275.0" text-anchor="end" font-size="12.5" font-weight="600" fill="#5B6578">order</text>
+<rect x="700" y="256" width="36" height="28" rx="3" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="718.0" y="275.0" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1F2A44">1</text>
+<text x="718.0" y="297" text-anchor="middle" font-size="10" font-weight="400" fill="#5B6578">apple</text>
+<rect x="740" y="256" width="36" height="28" rx="3" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="758.0" y="275.0" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1F2A44">4</text>
+<text x="758.0" y="297" text-anchor="middle" font-size="10" font-weight="400" fill="#5B6578">banana</text>
+<rect x="780" y="256" width="36" height="28" rx="3" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="798.0" y="275.0" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1F2A44">6</text>
+<text x="798.0" y="297" text-anchor="middle" font-size="10" font-weight="400" fill="#5B6578">cherry</text>
+<rect x="820" y="256" width="36" height="28" rx="3" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="838.0" y="275.0" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1F2A44">0</text>
+<text x="838.0" y="297" text-anchor="middle" font-size="10" font-weight="400" fill="#5B6578">date</text>
+<rect x="860" y="256" width="36" height="28" rx="3" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="878.0" y="275.0" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1F2A44">5</text>
+<text x="878.0" y="297" text-anchor="middle" font-size="10" font-weight="400" fill="#5B6578">fig</text>
+<rect x="900" y="256" width="36" height="28" rx="3" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="918.0" y="275.0" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1F2A44">2</text>
+<text x="918.0" y="297" text-anchor="middle" font-size="10" font-weight="400" fill="#5B6578">grape</text>
+<rect x="940" y="256" width="36" height="28" rx="3" fill="#FFFFFF" stroke="#8A93A6" stroke-width="1" stroke-dasharray="4 3"/>
+<rect x="980" y="256" width="36" height="28" rx="3" fill="#FFFFFF" stroke="#8A93A6" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="1030" y="275.0" text-anchor="start" font-size="11.5" font-weight="400" fill="#5B6578">1 B per entry</text>
+<text x="700" y="318" text-anchor="start" font-size="12.5" font-weight="400" fill="#5B6578">same six entries; physical placement is arbitrary, order[] gives the sorted sequence</text>
+<text x="60" y="368" text-anchor="start" font-size="14" font-weight="700" fill="#1F2A44">Insert coconut  (rank 3, between cherry and date)</text>
+<text x="120" y="405.0" text-anchor="end" font-size="12.5" font-weight="600" fill="#5B6578">entries</text>
+<rect x="130" y="380" width="59" height="40" rx="4" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="159.5" y="405.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">apple</text>
+<rect x="192" y="380" width="59" height="40" rx="4" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="221.5" y="405.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">banana</text>
+<rect x="254" y="380" width="59" height="40" rx="4" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="283.5" y="405.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">cherry</text>
+<rect x="316" y="380" width="59" height="40" rx="4" fill="#FFF1E6" stroke="#E8731A" stroke-width="1.8"/>
+<text x="345.5" y="405.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">coconut</text>
+<rect x="378" y="380" width="59" height="40" rx="4" fill="#FDE6D3" stroke="#E8731A" stroke-width="1.8"/>
+<text x="407.5" y="405.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">date</text>
+<rect x="440" y="380" width="59" height="40" rx="4" fill="#FDE6D3" stroke="#E8731A" stroke-width="1.8"/>
+<text x="469.5" y="405.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">fig</text>
+<rect x="502" y="380" width="59" height="40" rx="4" fill="#FDE6D3" stroke="#E8731A" stroke-width="1.8"/>
+<text x="531.5" y="405.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">grape</text>
+<rect x="564" y="380" width="59" height="40" rx="4" fill="#FFFFFF" stroke="#8A93A6" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="130" y="438" text-anchor="start" font-size="12.5" font-weight="400" fill="#5B6578">shift date, fig, grape one slot right: 3 descriptors × 32 B = 96 B moved, then write 32 B</text>
+<text x="623" y="372" text-anchor="end" font-size="12.5" font-weight="600" fill="#E8731A">moved 96 B + written 32 B</text>
+<text x="690" y="405.0" text-anchor="end" font-size="12.5" font-weight="600" fill="#5B6578">slots</text>
+<rect x="700" y="380" width="59" height="40" rx="4" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="729.5" y="405.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">date</text>
+<text x="729.5" y="375" text-anchor="middle" font-size="10.5" font-weight="400" fill="#5B6578">slot 0</text>
+<rect x="762" y="380" width="59" height="40" rx="4" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="791.5" y="405.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">apple</text>
+<text x="791.5" y="375" text-anchor="middle" font-size="10.5" font-weight="400" fill="#5B6578">slot 1</text>
+<rect x="824" y="380" width="59" height="40" rx="4" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="853.5" y="405.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">grape</text>
+<text x="853.5" y="375" text-anchor="middle" font-size="10.5" font-weight="400" fill="#5B6578">slot 2</text>
+<rect x="886" y="380" width="59" height="40" rx="4" fill="#FFF1E6" stroke="#E8731A" stroke-width="1.8"/>
+<text x="915.5" y="405.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">coconut</text>
+<text x="915.5" y="375" text-anchor="middle" font-size="10.5" font-weight="400" fill="#5B6578">slot 3</text>
+<rect x="948" y="380" width="59" height="40" rx="4" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="977.5" y="405.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">banana</text>
+<text x="977.5" y="375" text-anchor="middle" font-size="10.5" font-weight="400" fill="#5B6578">slot 4</text>
+<rect x="1010" y="380" width="59" height="40" rx="4" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="1039.5" y="405.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">fig</text>
+<text x="1039.5" y="375" text-anchor="middle" font-size="10.5" font-weight="400" fill="#5B6578">slot 5</text>
+<rect x="1072" y="380" width="59" height="40" rx="4" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="1101.5" y="405.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">cherry</text>
+<text x="1101.5" y="375" text-anchor="middle" font-size="10.5" font-weight="400" fill="#5B6578">slot 6</text>
+<rect x="1134" y="380" width="59" height="40" rx="4" fill="#FFFFFF" stroke="#8A93A6" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="690" y="449.0" text-anchor="end" font-size="12.5" font-weight="600" fill="#5B6578">occupied</text>
+<rect x="716.5" y="430" width="26" height="24" rx="3" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1"/>
+<text x="729.5" y="447.0" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2A44">1</text>
+<rect x="778.5" y="430" width="26" height="24" rx="3" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1"/>
+<text x="791.5" y="447.0" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2A44">1</text>
+<rect x="840.5" y="430" width="26" height="24" rx="3" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1"/>
+<text x="853.5" y="447.0" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2A44">1</text>
+<rect x="902.5" y="430" width="26" height="24" rx="3" fill="#FFF1E6" stroke="#1F2A44" stroke-width="1"/>
+<text x="915.5" y="447.0" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2A44">1</text>
+<rect x="964.5" y="430" width="26" height="24" rx="3" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1"/>
+<text x="977.5" y="447.0" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2A44">1</text>
+<rect x="1026.5" y="430" width="26" height="24" rx="3" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1"/>
+<text x="1039.5" y="447.0" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2A44">1</text>
+<rect x="1088.5" y="430" width="26" height="24" rx="3" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1"/>
+<text x="1101.5" y="447.0" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2A44">1</text>
+<rect x="1150.5" y="430" width="26" height="24" rx="3" fill="#FFFFFF" stroke="#1F2A44" stroke-width="1"/>
+<text x="1163.5" y="447.0" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2A44">0</text>
+<text x="690" y="485.0" text-anchor="end" font-size="12.5" font-weight="600" fill="#5B6578">order</text>
+<rect x="700" y="466" width="36" height="28" rx="3" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="718.0" y="485.0" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1F2A44">1</text>
+<text x="718.0" y="507" text-anchor="middle" font-size="10" font-weight="400" fill="#5B6578">apple</text>
+<rect x="740" y="466" width="36" height="28" rx="3" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="758.0" y="485.0" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1F2A44">4</text>
+<text x="758.0" y="507" text-anchor="middle" font-size="10" font-weight="400" fill="#5B6578">banana</text>
+<rect x="780" y="466" width="36" height="28" rx="3" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="798.0" y="485.0" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1F2A44">6</text>
+<text x="798.0" y="507" text-anchor="middle" font-size="10" font-weight="400" fill="#5B6578">cherry</text>
+<rect x="820" y="466" width="36" height="28" rx="3" fill="#FFF1E6" stroke="#E8731A" stroke-width="1.8"/>
+<text x="838.0" y="485.0" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1F2A44">3</text>
+<text x="838.0" y="507" text-anchor="middle" font-size="10" font-weight="400" fill="#5B6578">coconut</text>
+<rect x="860" y="466" width="36" height="28" rx="3" fill="#FDE6D3" stroke="#E8731A" stroke-width="1.8"/>
+<text x="878.0" y="485.0" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1F2A44">0</text>
+<text x="878.0" y="507" text-anchor="middle" font-size="10" font-weight="400" fill="#5B6578">date</text>
+<rect x="900" y="466" width="36" height="28" rx="3" fill="#FDE6D3" stroke="#E8731A" stroke-width="1.8"/>
+<text x="918.0" y="485.0" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1F2A44">5</text>
+<text x="918.0" y="507" text-anchor="middle" font-size="10" font-weight="400" fill="#5B6578">fig</text>
+<rect x="940" y="466" width="36" height="28" rx="3" fill="#FDE6D3" stroke="#E8731A" stroke-width="1.8"/>
+<text x="958.0" y="485.0" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1F2A44">2</text>
+<text x="958.0" y="507" text-anchor="middle" font-size="10" font-weight="400" fill="#5B6578">grape</text>
+<rect x="980" y="466" width="36" height="28" rx="3" fill="#FFFFFF" stroke="#8A93A6" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="1030" y="485.0" text-anchor="start" font-size="11.5" font-weight="400" fill="#5B6578">1 B per entry</text>
+<text x="700" y="528" text-anchor="start" font-size="12.5" font-weight="400" fill="#5B6578">write the descriptor into free slot 3 (32 B), set its bit, shift three order bytes: 3 B moved</text>
+<text x="1193" y="358" text-anchor="end" font-size="12.5" font-weight="600" fill="#E8731A">moved 3 B + written 32 B</text>
+<text x="60" y="588" text-anchor="start" font-size="14" font-weight="700" fill="#1F2A44">Delete banana  (rank 1)</text>
+<text x="120" y="625.0" text-anchor="end" font-size="12.5" font-weight="600" fill="#5B6578">entries</text>
+<rect x="130" y="600" width="59" height="40" rx="4" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="159.5" y="625.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">apple</text>
+<rect x="192" y="600" width="59" height="40" rx="4" fill="#FDE6D3" stroke="#E8731A" stroke-width="1.8"/>
+<text x="221.5" y="625.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">cherry</text>
+<rect x="254" y="600" width="59" height="40" rx="4" fill="#FDE6D3" stroke="#E8731A" stroke-width="1.8"/>
+<text x="283.5" y="625.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">coconut</text>
+<rect x="316" y="600" width="59" height="40" rx="4" fill="#FDE6D3" stroke="#E8731A" stroke-width="1.8"/>
+<text x="345.5" y="625.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">date</text>
+<rect x="378" y="600" width="59" height="40" rx="4" fill="#FDE6D3" stroke="#E8731A" stroke-width="1.8"/>
+<text x="407.5" y="625.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">fig</text>
+<rect x="440" y="600" width="59" height="40" rx="4" fill="#FDE6D3" stroke="#E8731A" stroke-width="1.8"/>
+<text x="469.5" y="625.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">grape</text>
+<rect x="502" y="600" width="59" height="40" rx="4" fill="#FFFFFF" stroke="#8A93A6" stroke-width="1" stroke-dasharray="4 3"/>
+<rect x="564" y="600" width="59" height="40" rx="4" fill="#FFFFFF" stroke="#8A93A6" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="130" y="658" text-anchor="start" font-size="12.5" font-weight="400" fill="#5B6578">shift cherry … grape one slot left: 5 descriptors × 32 B = 160 B moved</text>
+<text x="623" y="592" text-anchor="end" font-size="12.5" font-weight="600" fill="#E8731A">moved 160 B</text>
+<text x="690" y="625.0" text-anchor="end" font-size="12.5" font-weight="600" fill="#5B6578">slots</text>
+<rect x="700" y="600" width="59" height="40" rx="4" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="729.5" y="625.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">date</text>
+<text x="729.5" y="595" text-anchor="middle" font-size="10.5" font-weight="400" fill="#5B6578">slot 0</text>
+<rect x="762" y="600" width="59" height="40" rx="4" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="791.5" y="625.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">apple</text>
+<text x="791.5" y="595" text-anchor="middle" font-size="10.5" font-weight="400" fill="#5B6578">slot 1</text>
+<rect x="824" y="600" width="59" height="40" rx="4" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="853.5" y="625.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">grape</text>
+<text x="853.5" y="595" text-anchor="middle" font-size="10.5" font-weight="400" fill="#5B6578">slot 2</text>
+<rect x="886" y="600" width="59" height="40" rx="4" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="915.5" y="625.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">coconut</text>
+<text x="915.5" y="595" text-anchor="middle" font-size="10.5" font-weight="400" fill="#5B6578">slot 3</text>
+<rect x="948" y="600" width="59" height="40" rx="4" fill="#FFFFFF" stroke="#8A93A6" stroke-width="1" stroke-dasharray="4 3"/>
+<rect x="1010" y="600" width="59" height="40" rx="4" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="1039.5" y="625.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">fig</text>
+<text x="1039.5" y="595" text-anchor="middle" font-size="10.5" font-weight="400" fill="#5B6578">slot 5</text>
+<rect x="1072" y="600" width="59" height="40" rx="4" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="1101.5" y="625.0" text-anchor="middle" font-size="13" font-weight="600" fill="#1F2A44">cherry</text>
+<text x="1101.5" y="595" text-anchor="middle" font-size="10.5" font-weight="400" fill="#5B6578">slot 6</text>
+<rect x="1134" y="600" width="59" height="40" rx="4" fill="#FFFFFF" stroke="#8A93A6" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="690" y="669.0" text-anchor="end" font-size="12.5" font-weight="600" fill="#5B6578">occupied</text>
+<rect x="716.5" y="650" width="26" height="24" rx="3" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1"/>
+<text x="729.5" y="667.0" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2A44">1</text>
+<rect x="778.5" y="650" width="26" height="24" rx="3" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1"/>
+<text x="791.5" y="667.0" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2A44">1</text>
+<rect x="840.5" y="650" width="26" height="24" rx="3" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1"/>
+<text x="853.5" y="667.0" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2A44">1</text>
+<rect x="902.5" y="650" width="26" height="24" rx="3" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1"/>
+<text x="915.5" y="667.0" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2A44">1</text>
+<rect x="964.5" y="650" width="26" height="24" rx="3" fill="#FFFFFF" stroke="#1F2A44" stroke-width="1"/>
+<text x="977.5" y="667.0" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2A44">0</text>
+<rect x="1026.5" y="650" width="26" height="24" rx="3" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1"/>
+<text x="1039.5" y="667.0" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2A44">1</text>
+<rect x="1088.5" y="650" width="26" height="24" rx="3" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1"/>
+<text x="1101.5" y="667.0" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2A44">1</text>
+<rect x="1150.5" y="650" width="26" height="24" rx="3" fill="#FFFFFF" stroke="#1F2A44" stroke-width="1"/>
+<text x="1163.5" y="667.0" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2A44">0</text>
+<text x="690" y="705.0" text-anchor="end" font-size="12.5" font-weight="600" fill="#5B6578">order</text>
+<rect x="700" y="686" width="36" height="28" rx="3" fill="#EEF1F6" stroke="#1F2A44" stroke-width="1.2"/>
+<text x="718.0" y="705.0" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1F2A44">1</text>
+<text x="718.0" y="727" text-anchor="middle" font-size="10" font-weight="400" fill="#5B6578">apple</text>
+<rect x="740" y="686" width="36" height="28" rx="3" fill="#FDE6D3" stroke="#E8731A" stroke-width="1.8"/>
+<text x="758.0" y="705.0" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1F2A44">6</text>
+<text x="758.0" y="727" text-anchor="middle" font-size="10" font-weight="400" fill="#5B6578">cherry</text>
+<rect x="780" y="686" width="36" height="28" rx="3" fill="#FDE6D3" stroke="#E8731A" stroke-width="1.8"/>
+<text x="798.0" y="705.0" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1F2A44">3</text>
+<text x="798.0" y="727" text-anchor="middle" font-size="10" font-weight="400" fill="#5B6578">coconut</text>
+<rect x="820" y="686" width="36" height="28" rx="3" fill="#FDE6D3" stroke="#E8731A" stroke-width="1.8"/>
+<text x="838.0" y="705.0" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1F2A44">0</text>
+<text x="838.0" y="727" text-anchor="middle" font-size="10" font-weight="400" fill="#5B6578">date</text>
+<rect x="860" y="686" width="36" height="28" rx="3" fill="#FDE6D3" stroke="#E8731A" stroke-width="1.8"/>
+<text x="878.0" y="705.0" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1F2A44">5</text>
+<text x="878.0" y="727" text-anchor="middle" font-size="10" font-weight="400" fill="#5B6578">fig</text>
+<rect x="900" y="686" width="36" height="28" rx="3" fill="#FDE6D3" stroke="#E8731A" stroke-width="1.8"/>
+<text x="918.0" y="705.0" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1F2A44">2</text>
+<text x="918.0" y="727" text-anchor="middle" font-size="10" font-weight="400" fill="#5B6578">grape</text>
+<rect x="940" y="686" width="36" height="28" rx="3" fill="#FFFFFF" stroke="#8A93A6" stroke-width="1" stroke-dasharray="4 3"/>
+<rect x="980" y="686" width="36" height="28" rx="3" fill="#FFFFFF" stroke="#8A93A6" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="1030" y="705.0" text-anchor="start" font-size="11.5" font-weight="400" fill="#5B6578">1 B per entry</text>
+<text x="700" y="748" text-anchor="start" font-size="12.5" font-weight="400" fill="#5B6578">clear bit 4 and shift five order bytes: 5 B moved; the descriptor is left in place and the slot is reusable</text>
+<text x="1193" y="578" text-anchor="end" font-size="12.5" font-weight="600" fill="#E8731A">moved 5 B</text>
+<rect x="60" y="810" width="1160" height="110" rx="8" fill="#F8F9FB" stroke="#E8731A" stroke-width="1.4"/>
+<text x="78" y="834" text-anchor="start" font-size="14" font-weight="700" fill="#1F2A44">Scaling this up</text>
+<text x="78" y="856" text-anchor="start" font-size="13" font-weight="400" fill="#5B6578">In a v1 leaf of 59 entries, an insertion or deletion in the middle shifts about 29 bytes of order[] instead of about 29 × 32 B ≈ 930 B of descriptors;</text>
+<text x="78" y="875" text-anchor="start" font-size="13" font-weight="400" fill="#5B6578">internal entries (separator KeyRef, child pointer, two CVs) are larger still. Both designs write the new descriptor itself. Reading pays one indirection</text>
+<text x="78" y="894" text-anchor="start" font-size="13" font-weight="400" fill="#5B6578">(order[rank] → slot), parentRank() scans order[] to recover a rank, and splits still move descriptors between nodes. Physical slots never change</text>
+<text x="78" y="913" text-anchor="start" font-size="13" font-weight="400" fill="#5B6578">while an entry lives in a node, which is what keeps parentSlot references valid across reorderings.</text>
+</svg>
