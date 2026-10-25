@@ -3,6 +3,7 @@
 **Resolver revision:** `aff127286e68ea7933dc9ef502a7dbd760e1e43d`.  
 **FDB integration revision:** `5a07ab1936aaa6c01b5f36191c5446dee0a3d674`.  
 **Evaluation campaign:** 23 October 2026.  
+**Code:** tag [`resolver-v1`](https://github.com/ricardojimenezperis/foundationdb/tree/resolver-v1) of the FoundationDB fork.  
 **Documentation updated:** 24 October 2026.
 
 ## Start here
@@ -33,4 +34,4 @@ This is one component milestone within Beyond-5s. Longer resolver history must b
 
 Each component can evolve through its own milestone snapshots. An integrated release records the resolver, Storage Server and transaction-tracking revisions it combines. This snapshot describes v1 and compares its measured behavior with FDB; subsequent implementations are outside its scope.
 
-Source code and raw campaign artifacts are not bundled here; their identities, locations and validation limits are recorded in the evidence register.
+Source code and raw campaign artifacts are not bundled here. The code, its tests, the trace generator and the evaluation scripts are published in a FoundationDB fork at the tag [`resolver-v1`](https://github.com/ricardojimenezperis/foundationdb/tree/resolver-v1), and the [release of the same name](https://github.com/ricardojimenezperis/foundationdb/releases/tag/resolver-v1) carries the evidence archive of the measurement runs. Their identities and validation limits are recorded in the evidence register.

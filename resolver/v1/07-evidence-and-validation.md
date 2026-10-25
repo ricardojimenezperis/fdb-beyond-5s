@@ -10,6 +10,19 @@
 | FDB integration | `5a07ab1936aaa6c01b5f36191c5446dee0a3d674` |
 | Superseded first resolver campaign revision | `1ec5d3d4d8907e6883568a168bfaab5d1fcca044` |
 | Equal-memory campaign | 23 October 2026 |
+| Published code | Tag [`resolver-v1`](https://github.com/ricardojimenezperis/foundationdb/tree/resolver-v1) of the FoundationDB fork |
+
+## Published code
+
+The code is published in a [FoundationDB fork](https://github.com/ricardojimenezperis/foundationdb), on the branch and tag `resolver-v1`, over upstream FoundationDB `746d04926c6b30b7fb5ba3b4dfa3bfca19f56e9c`:
+
+| Part | Location |
+|---|---|
+| Resolver v1 source and standalone tests | [`fdbserver/resolver/resolver1/`](https://github.com/ricardojimenezperis/foundationdb/tree/resolver-v1/fdbserver/resolver/resolver1), with its original commit history up to the campaign revision `aff127286e68ea7933dc9ef502a7dbd760e1e43d` |
+| FoundationDB integration (btree-v1) | Commit `c44fd2247be51c26ca48c56dcc0587fb7b54ea04` on that branch; the integration revision `5a07ab1936aaa6c01b5f36191c5446dee0a3d674` of the evaluated binary sat on a private base with other conflict histories, which are not part of this publication |
+| Harness, trace generator and FDB baseline binary | Commit `1dfa7ffe6a5210c66e36a628552d10a7046649d0`, the parent of the integration |
+| Evaluation scripts and reproduction | [`fdbserver/resolver/by5eval/README.md`](https://github.com/ricardojimenezperis/foundationdb/blob/resolver-v1/fdbserver/resolver/by5eval/README.md) |
+| Evidence archive | [Release `resolver-v1`](https://github.com/ricardojimenezperis/foundationdb/releases/tag/resolver-v1): `resolver-v1-evidence.tar.xz`, 65,365,216 bytes, SHA-256 `6a88e7002d959be09a1286b2a2e7f07976eaf78b4cc3fe8ca72cdff9ed9318fe`, described in [`EVIDENCE.md`](https://github.com/ricardojimenezperis/foundationdb/blob/resolver-v1/fdbserver/resolver/by5eval/EVIDENCE.md) |
 
 The source code itself is not included in this snapshot; the table below names the files each part of the design describes, as they appear in the resolver campaign revision.
 
