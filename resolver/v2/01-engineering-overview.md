@@ -19,6 +19,6 @@ The history representation remains disjoint write intervals carrying commit vers
 
 The same-session Intel campaign reports v2.6 at 0.891× FDB throughput on conflictset points and 0.967× on ranges. In the custom benchmark through FDB, range reads reach 1.138× FDB, while point and range writes reach 0.522× and 0.651× respectively. These are different workloads and phases; they must not be collapsed into one speedup.
 
-On the long trace at a 6 GiB counted-history budget, reported minimum retained age is 582.938 s, matching v1 within a batch. Retention is still drifting downward, so this is not a steady-state claim. Writes consume about 72.5% of v2.6's execution time there. Historical FDB/v107 timing references used different conditions and are not controlled speed comparisons.
+On the long trace at a 6 GiB counted-history budget, reported minimum retained age is 582.938 s, matching v1 within a batch. Retention is still drifting downward, so this is not a steady-state claim. Writes consume about 72.5% of v2.6's execution time there. Earlier timing references used different conditions and are not controlled speed comparisons.
 
 The next performance work therefore targets writes and then independently evaluates pool backing. A common read/write descent, stable task ownership, leaf write-destination arrays and HugeTLB support are not implemented by this v2 design.
