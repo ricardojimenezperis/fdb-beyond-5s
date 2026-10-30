@@ -3,537 +3,324 @@
 The baseline for the existing FoundationDB internals described here is
 `apple/foundationdb` main at `a443d3ee60`.
 
-This document describes the current Resolver design: a temporal B+ tree of disjoint write intervals whose nodes and key records share one block pool under a configured memory budget. History is reclaimed by age as capacity is needed, and the Resolver's validation boundary advances with it. The sequential implementation, resolver v1, is the reference for this document; its milestone snapshot, with the decision record, journal, evaluation and evidence register, is under [`resolver/v1/`](../resolver/v1/README.md).
+This document describes the current Resolver design, resolver v2: a temporal B+ tree of disjoint write intervals whose nodes and key records share one block pool under a configured memory budget, checked in groups with shared navigation and software prefetching. Its milestone snapshot is under [`resolver/v2/`](../resolver/v2/); the sequential first version it builds on is the [resolver v1 snapshot](../resolver/v1/README.md).
 
-## What the resolver does
+Resolver v2 checks read-conflict ranges in groups, sharing tree navigation among sorted reads and overlapping memory accesses through software prefetching. It retains v1's range representation, write application, proactive splitting and history reclamation.
 
-A transaction reads at a database version and, when attempting to commit, declares its read- and write-conflict ranges. The resolver checks whether writes committed after its read version overlap the ranges it declares as read. If they do, the transaction is marked conflicting and cannot commit on the basis of that read snapshot.
+The [project architecture](../resolver/v2/02-project-architecture.md) explains how the tree fits into FoundationDB's resolver and how conflict-history retention relates to transaction admission.
 
-The resolver's history does not contain database values. It records **which regions of the key space have been written and at which commit versions**. For an admitted read at version RV, finding an overlapping write interval with CV greater than RV establishes a conflict. When a new write overlaps a write interval already stored in the history, the resolver updates the overlapping portion to the new commit version and preserves the portions outside the write with their original versions. Read-conflict checks then search this history for overlapping writes committed after the transaction’s read version.
+## Objective
 
-The two kinds of ranges translate into different operations on the underlying data structure:
+The tree must keep write-conflict history within a fixed pool budget while checking read batches efficiently. V2 reduces repeated searches by routing nearby reads together and interleaving independent tasks.
 
-| Input | Operation on conflict history |
+Grouped checks must produce the same conflict decisions as a sequential scan of retained history, including half-open boundaries, transaction-level early rejection and optional reporting of every conflicting read. Correctness is independent of whether a prefetch completes before the data is needed.
+
+## Background
+
+A resolver stores conflict history, not database values. A read at version RV conflicts if a retained write `[wb,we)` at CV satisfies:
+
+`read.begin < we && wb < read.end && CV > RV`.
+
+History represents disjoint write intervals with their relevant commit versions. Overlaying `[30,60)@120` on `[10,90)@100` produces `[10,30)@100`, `[30,60)@120`, `[60,90)@100`. The two exteriors retain their original CV. Reads can overlap one another, have equal begins, and extend across arbitrarily many leaves; their ends need not be sorted.
+
+V1 checks one read at a time using a root descent, an in-leaf search, a possible predecessor, and a forward leaf scan. V2 partitions a sorted sequence of read begins among children, shares work on nearby reads, and interleaves task continuations. Accepted writes are still materialized individually through `addWrite`.
+
+Older snapshot reads require both resolver conflict history and the corresponding data versions on Storage Servers. Transaction admission and version protection must coordinate retention across those components.
+
+## Requirements and contract
+
+| Requirement | V2 behavior |
 |---|---|
-| Write-conflict ranges from accepted transactions | Materialize them by modifying the structure: insert new coverage and replace or trim existing coverage |
-| Read-conflict ranges | Turn them into range queries: search for overlapping writes newer than the read version |
+| Half-open intervals | Equality at either excluded boundary does not establish overlap |
+| Temporal predicate | Only a write with CV strictly greater than RV conflicts |
+| History cutoff | A read with RV below `reclaimCV_` marks its transaction too old; RV equal to the cutoff is admissible |
+| Existing transaction status | Existing conflict flags are never cleared |
+| Optional complete reporting | Other reads of a conflicted transaction remain eligible when their reporting pointer is non-null |
+| Individual read completion | Once its conflict bit is set, that read needs no further checking |
+| Stable batch view | Writes and key-block reclamation do not interleave with an active `checkReads` call |
+| Cursor safety | Leaf ranks are compacted once before first use in a batch; empty-node release is deferred until tasks finish |
+| Memory scope | The pool bounds history blocks; batch vectors and task queues are additional memory |
 
-Reads are not inserted as entries in write history. Checking reads and materializing accepted writes remain separate operations. 
+`checkReads<G>` receives sorted native endpoints (`points`), transaction records, read ranges, per-transaction offsets, existing transaction statuses, an output conflict bitmap, and a too-old counter. The pointed-to input records and key bytes must remain alive during the call. `G` is a positive compile-time task capacity.
 
-### Validation boundary
+The method resets the per-read conflict bitmap. It may set transaction status and `tooOld`, increment the too-old counter once per newly too-old transaction, refresh separators, compact expired leaf entries, and remove empty nodes after traversal. These maintenance changes modify the tree, but no writes are added and no key blocks are reclaimed during the call.
 
-The validation boundary, stored in `validationMinRV`, is the oldest read
-version for which the Resolver retains sufficient conflict history. It never
-decreases and must advance before discarded history becomes inaccessible. Transactions with
-read-conflict ranges and an RV below it receive `transaction_too_old`; an RV
-equal to it remains admissible. Writes with a CV at or below it cannot conflict
-with an admitted read. Transactions without read-conflict ranges remain exempt
-from this age check.
+The method reports individual conflicts through `conflicts[rangeIndex]`. The FDB adapter must translate this bitmap into the native `conflictingKeyRange` indices. Inside the tree, a non-null reporting pointer keeps the transaction's remaining reads eligible; the tree itself does not append indices to that pointer.
 
-The tree exposes its reclamation cutoff through `reclaimCV()`. In the
-evaluation harness, this value is used directly as the retained-history
-boundary (`validationMinRV`): reads with a read version below it are
-rejected as too old for the retained history. Equality is admissible: if
-`RV == reclaimCV()`, the discarded writes have `CV <= reclaimCV()` and cannot
-satisfy the conflict condition `CV > RV`.
-On recovery, each new Resolver initializes `validationMinRV` to
-`recoveryTransactionVersion`.
+`addWrites` accepts sorted, disjoint intervals from accepted transactions, all at the supplied CV; CVs must be nondecreasing across calls. It applies each interval through `addWrite`.
 
-Retention is capacity-driven, without client leases or a global minimum-RV
-protocol. Idle time alone does not discard history. Commit Proxy routing and
-Storage Server availability have their own boundaries.
+## Design overview
 
-For a transaction spanning several Resolvers, writes accepted locally may remain
-recorded even if another Resolver rejects the transaction, as in current FDB.
-The conservative false conflicts that can result from this behaviour are preserved.
+### Recursive partitioning of two ordered sequences
 
-## Materializing writes: interiors and exteriors
+At each internal node, sorted read begins must be distributed among the children. The child boundaries and the read begins form two ordered sequences. Independent searches repeatedly compare reads with the same boundaries; recursive partitioning handles both sequences together:
 
-Writes from different transactions and versions may overlap. The history maintains an ordered representation of disjoint intervals, associating each covered region with its most recent relevant write version. **The semantic rule is the same as in the skip-list resolver:** overlay a new write on existing history, identify the intersection, and preserve what lies outside it. The structure used to represent and update the boundaries changes; the meaning of the update does not.
+1. Select the middle boundary key.
+2. Binary-search the read sequence for the first begin at or above that key.
+3. Recurse on the lower boundaries with the reads below the key, and on the upper boundaries with the remaining reads. The selected boundary is resolved and excluded from both recursive subproblems.
+4. Skip a subproblem with no reads. A nonempty read slice with no boundary left belongs to one child.
 
-Relative to a new write, the **interior** of an old interval is the portion covered by that write. Its **exteriors** are the portions outside the write, which must retain their old versions. There may be a left exterior, a right exterior, both, or neither. These terms describe overlap with the write; they are unrelated to internal tree nodes.
+For example, child minima `[5,20,40,60]` give boundary keys `[20,40,60]`; the first minimum is not a boundary between children. With read begins `[10,25,40,45,70]`, boundary 40 divides the problem into lower boundary `[20]` with reads `[10,25]`, and upper boundary `[60]` with reads `[40,45,70]`. Resolving those subproblems gives child slices `[10]`, `[25]`, `[40,45]` and `[70]`. Equal begins belong to the right of the matching boundary.
 
-For example, suppose history contains `[10,90)` at CV 100 and a new write covers `[30,60)` at CV 120. Numeric keys are used for readability; the implementation orders keys lexicographically.
+![Recursive partitioning distributes sorted read begins among child destinations.](../resolver/v2/figs/fig-v2-recursive-partition.png)
 
-| Part of the old interval | Range | Treatment |
+*Figure 1. Each middle boundary partitions the sorted read begins into smaller subproblems. Resolved boundaries are excluded from further searches, and equal begins go right. The example uses six comparisons, versus ten independent upper-bound comparisons. Each nonempty group continues inside its destination child.*
+
+The same procedure is applied within each child reached by a nonempty slice, continuing down the tree until the starting leaves are known. This combines recursive partitioning *within* each node with descent *between* nodes. Partitions of one node can progress independently; no node-wide completion barrier is required.
+
+### Routing comparison cost
+
+At a node with s boundary keys and r read begins, independent binary searches use `O(r log(s+1))` key comparisons. Recursive partitioning searches progressively smaller read slices and skips empty subproblems. For positive s and r, its worst-case comparison bound is **`O(m log2(1+M/m))`**, where `m=min(s,r)` and `M=max(s,r)`.
+
+When the sequences have comparable lengths k, this is `O(k)` rather than `O(k log k)`. With one read, it remains `O(log(s+1))`; there is little sharing to exploit. With many more reads than boundaries, the bound becomes `O(s log(1+r/s))`: a boundary search classifies whole read slices at once.
+
+The bound counts **routing comparisons at one node**, assuming sorted input and live separators. Total batch time also includes input extraction and sorting, variable-length byte comparisons, expired-separator repair, and interval scans. Shared navigation reuses node data, while prefetching overlaps some of the remaining memory latency. Section 3 of the detailed design derives the bound.
+
+### Example: 10,000 reads and a 6 GiB history pool
+
+Consider a **synthetic tree model** with the same pool geometry as the [long-trace evaluation](../resolver/v2/06-evaluation.md#long-trace-equal-counted-history-budget): 98,300 pages of 64 KiB, divided into 2 KiB blocks. Its occupancy, height and entry count are assumptions for this example, rather than measurements of the tree in that run.
+
+Assume a two-child root, four further internal levels with 28 children per node, and leaves with 41 intervals: about 70% of the respective 40-child and 59-entry capacities. This gives 1,229,312 leaves and 50,401,792 history intervals. Nodes use 2,610,878,464 bytes; 3,831,310,336 bytes remain for key blocks. After 24-byte key-block headers, filling that space corresponds to about 75 stored endpoint bytes per interval. This key size makes the assumed tree fit within the pool.
+
+For 10,000 eligible read begins uniformly sampled over those intervals, the model gives the following key-comparison counts with seed 1:
+
+| Location | Nodes in the modeled tree at that depth | Independent searches | Recursive partitioning |
+|---|---:|---:|---:|
+| Root, 2 children | 1 | 10,000 | 13 |
+| Internal depth 1, 28 children | 2 | 48,624 | 508 |
+| Internal depth 2, 28 children | 56 | 48,646 | 6,994 |
+| Internal depth 3, 28 children | 1,568 | 48,543 | 35,013 |
+| Internal depth 4, 28 children | 43,904 | 48,595 | 47,968 |
+| **Internal routing subtotal** | | **204,408** | **90,496** |
+| Initial in-leaf search, 41 entries | 1,229,312 | 54,683 | 54,460 |
+| **Total to locate read starts** | | **259,091** | **144,956** |
+
+Internal routing uses **55.7% fewer comparisons**. Including the initial leaf search, the reduction is **44.1%**, a comparison-count ratio of **1.79:1**. Upper levels provide most sharing; near the leaves, almost every visited node has only one read. The model reaches 9,959 distinct leaves, so sharing their initial searches saves little.
+
+Locality changes the result. Keeping the same tree and batch size but sampling the begins within a contiguous region of 100,000 history intervals gives:
+
+| Distribution of 10,000 read begins | Independent searches, including initial leaf search | Grouped searches, including initial leaf search | Comparison reduction |
+|---|---:|---:|---:|
+| Across the whole history | 259,091 | 144,956 | 44.1% |
+| Within 100,000 consecutive history intervals | 261,795 | 23,643 | 91.0% |
+
+The clustered case reaches 2,400 leaves and shares more work at every level. The counts assume live separators and reads that remain eligible throughout traversal. They exclude predecessor checks, overlap scans, eligibility checks, cleanup, task scheduling and prefetch instructions, so the comparison reduction need not translate into the same runtime speedup. Both methods search the same child boundaries and omit the redundant first-child minimum. The model also records v1-style searches that include that minimum.
+
+The batch contains **10,000 read intervals reaching the tree**; 10,000 transactions with four reads each would instead supply 40,000 intervals. Keys are represented by their sorted positions, without simulating byte lengths or cache behavior. The [Python model](../resolver/v2/analysis/partition-comparison-example.py) reproduces the counts; its [JSON output](../resolver/v2/analysis/partition-comparison-example.json) records the assumptions and subtotals.
+
+### Resumable tasks
+
+A **task** represents one unfinished subproblem of the recursive algorithm. It records the current node, a consecutive slice of the read sequence, the remaining separator subrange, and the bounds/state of any binary search in progress. Once it reaches a leaf, it instead retains the positions and unresolved reads needed for scanning. Read records stay in the input arrays; tasks refer to them by indices.
+
+The initial task contains the root and all eligible reads. When partitioning produces two nonempty subproblems, the existing task keeps the left one and a new task receives the right one. Both initially reference the **same internal node**. When a task resolves its slice to one child, it replaces its current node with that child and continues there; descent itself does not require a new task. An empty half creates no task.
+
+These logical tasks execute interleaved on one thread rather than through recursive C++ calls. Up to G reside in an array, with a separate order array determining their visitation sequence. Each visit consumes an access prefetched earlier, advances its handler, and normally hints its next access before yielding. New right tasks wait for round-end admission; excess tasks are suspended by value in a LIFO vector. Resident, new and suspended tasks together represent all unfinished traversal work.
+
+Partitioning uses read **begins** to find starting leaves; it does not truncate intervals at child boundaries. At a leaf, a task locates its first read's start, checks a possible earlier write, and scans against its unresolved reads. A scan processes a whole leaf before yielding and hinting the right leaf, or finishes when no read remains or the chain ends. Long reads can therefore continue beyond their initial subtree. A root that is already a leaf enters this processing directly.
+
+## Detailed design
+
+### 1. Storage and key references
+
+Nodes and key records use equal-size blocks from one `PagePool`. Pages are 64 KiB; the default block size is 2 KiB. `RESOLVER1_BLOCK_SIZE` selects the block size at compilation. Physical slots, one-byte logical-order indices, and `FreeSlots<C>` belong to each concrete node type. A set free-map bit means **free**. The map uses `(C+63)/64` words; counts and indices limit node capacity to 255 slots.
+
+Node payloads use structures of arrays. A leaf keeps ranges and CVs; an internal node keeps separator ranges, separator CVs, child pointers and conservative child maximum CVs. `order[rank]` maps a logical sorted rank to its physical slot. Insertion and deletion shift these small indices rather than shifting every range descriptor. Splits still move descriptors between nodes.
+
+![Insertion and deletion move order indices while descriptors remain in fixed physical slots.](../resolver/v2/figs/fig-v2-order-bytes.png)
+
+*Figure 2. Logical key order is maintained through one-byte slot indices. Inserting coconut shifts three order bytes instead of 96 descriptor bytes; deleting banana shifts five instead of 160. A set bitmap bit denotes a free slot. The byte counts exclude bitmap and counter updates and, on insertion, the new order-index byte.*
+
+V2 uses one 24-byte `RangeRef` representation for leaf ranges and internal separators: first key-block pointer, offset, begin length, end offset, end length and first-block generation. A separator uses only the begin of the referenced range. It does not own separate key bytes or an inline prefix. A point range `[k,k\0)` stores the end once and reads its begin as the prefix without the final zero byte.
+
+![Nodes, range records and their allocation from the shared block pool.](../resolver/v2/figs/fig-v2-storage.png)
+
+*Figure 3. Nodes hold descriptors and references; key bytes reside in linked key blocks. Both use interchangeable blocks from one pool. Separators can reuse range records and compare only their begin.*
+
+Records can cross linked key blocks. Comparisons skip block headers. Key-block generations increase in allocation order; a reference is valid while its first-block generation exceeds the last reclaimed key-block generation. This validity test does not dereference the referenced block. Since later blocks cannot be reclaimed first, a surviving first block also protects the continuation of its record.
+
+Node generations serve a different purpose: deferred cleanup records hold `(node,generation)`. Release clears the node generation. Its field lies beyond the first bytes overwritten by the pool free-list link, so a later cleanup can recognize a released node without interpreting the link as a generation.
+
+![Key-block generations validate range references; node generations separately validate deferred leaf-cleanup records.](../resolver/v2/figs/fig-v2-generation.png)
+
+*Figure 4. A stored RangeRef remains valid while its blockGen exceeds the generation of the last reclaimed key block; checking this condition reads nothing from the referenced block. Node generations separately validate deferred leaf-cleanup records.*
+
+### 2. Building the read sequence
+
+`buildBeginIndexes` scans already-sorted endpoints; it does not sort keys again. It extracts begin endpoints and maps them to `{rangeIndex,transaction}`. For reads, `rangeIndex` addresses the global read vector. Write records are also collected in `writeBegins`, using transaction-local indices, but that sequence does not participate in v2 traversal or write application.
+
+The scan skips already-too-old transactions, empty reads, and reads of already-conflicted transactions unless complete reporting is requested. An RV below the cutoff marks the whole transaction too old, sets its conflict status, and increments the counter. A final compaction removes earlier collected reads of a transaction found too old later in endpoint order.
+
+The resulting `readBegins` is sorted by begin; equal begins are permitted. `readStillNeeded` checks the transaction's too-old flag, the individual read's conflict bit, and whether complete reporting overrides transaction-level rejection. This predicate is reevaluated as tasks advance: another task can reject the transaction in the meantime.
+
+### 3. Internal partition searches
+
+For an internal node with n children, separator rank zero names its first child's minimum; it is not a boundary between two children. Initial partition bounds are `[1,n)`. A task with separator bounds `[lo,hi)` covers child ranks `lo-1` through `hi-1` inclusive. When `lo==hi`, exactly one child remains, at `lo-1`.
+
+With fixed `mid=midpoint(lo,hi)`, search bounds `[readLo,readHi)` locate `lower_bound(read.begin, separator[mid])`. A read begin below the separator moves the lower bound to `midRead+1`; every other result moves the upper bound to `midRead`. Equality cannot terminate early because duplicate read begins must all be routed to the right.
+
+When the boundary is found, the separator itself is resolved:
+
+| Result | Separators still to search | Assigned read slice |
 |---|---|---|
-| Left exterior | `[10,30)` | Preserve at CV 100 |
-| Interior: intersection with the new write | `[30,60)` | Covered by the new write at CV 120 |
-| Right exterior | `[60,90)` | Preserve at CV 100 |
+| Left partition | `[lo,mid)` | `[readBegin,split)` |
+| Right partition | `[mid+1,hi)` | `[split,readEnd)` |
 
-The materialized result is **`[10,30)@100`, `[30,60)@120`, `[60,90)@100`**. Assigning CV 120 to the entire old interval could introduce false conflicts on the exteriors; keeping CV 100 on the interior could miss a real conflict.
+Only nonempty read slices survive. The current task becomes the left partition when both survive; its right sibling is copied into `newTasks` with its parent's position in the current round order.
 
-When a write spans several old intervals, fully covered entries are removed and the surviving exteriors at its boundaries are preserved:
+Example: child minima `[5,20,40,60]` and read begins `[10,25,40,45,70]`. Boundary 40 divides reads into `[10,25]` and `[40,45,70]`. Remaining boundaries are 20 and 60. Final child assignments are `[10]`, `[25]`, `[40,45]`, `[70]`; reads equal to 40 go to the child whose minimum is 40. Their later scans may continue beyond that child's subtree.
 
-| State | Intervals |
-|---|---|
-| Before | `[10,40)@100`, `[50,90)@110` |
-| New write | `[30,60)@120` |
-| After | `[10,30)@100`, `[30,60)@120`, `[60,90)@110` |
+**Deriving the routing comparison bound.** Let C(s,r) count key comparisons, with zero comparisons when either sequence is empty. A partition uses `O(log(r+1))` comparisons and creates subproblems satisfying `sL+sR=s-1`, `max(sL,sR)<=floor(s/2)`, and `rL+rR=r`. Thus:
 
-The new write also covers the former gap `[40,50)`. Materialization therefore does not merely store intersections with existing entries: it represents **the entire new write**, preserving only the old portions outside it. The possibility of two exteriors explains why insertion may need space for the new write and an additional right exterior. Section 9 develops the algorithm.
+`C(s,r) <= O(log(r+1)) + C(sL,rL) + C(sR,rR)`.
 
-## Checking reads: range searches
+At partition depth d, there are at most `min(2^d,r)` nonempty subproblems; their read lengths sum to at most r. Concavity of the logarithm bounds the level's comparisons by `O(kd log(1+r/kd))`, where `kd=min(2^d,r)`. There are `O(log(s+1))` levels because the separator range is halved.
 
-A read interval becomes an overlap query against history. Using the first example above, a transaction at RV 110 reading `[20,70)` encounters regions at CV 100, 120 and 100. The CV 120 region is sufficient to establish a conflict. Reading only `[10,30)` would not conflict with those writes: CV 100 is not newer than RV 110, and endpoint 30 is excluded.
+For `r<=s`, levels up to depth `log r` sum to `O(r)`; the remaining `O(log(s/r))` levels cost at most `O(r)` each, giving `O(r log(1+s/r))`. For `r>=s`, summing the levels gives `O(s log(1+r/s))`. Together these yield `O(m log(1+M/m))`. The bound is independent of task scheduling. Scanning writes overlapped by long reads remains a separate cost.
 
-The query must consider both writes beginning inside the read interval and a write beginning before it but extending into it. Locating the read's start is therefore not sufficient: the possible predecessor must also be checked, followed by candidates up to the end of the range or an early conflict.
+### 4. Task state and one dispatch per visit
 
-In a tree, **a read interval may span several leaves, covering regions reached through different root-to-leaf paths**. It is not necessarily a point lookup resolved entirely in the first leaf. An implementation could descend through the affected subtrees. V1 reaches those regions by locating the start with a descent and then scanning through linked leaves, checking the predecessor at the begin of the interval.
+The resident task array has G slots. `order[0..active)` identifies occupied slots in visitation order; `FreeSlots<G>` tracks free slots. `pending` contains copied suspended tasks, with the next task at the back. `newTasks` contains copied right siblings created during the current round.
 
-This separates the query's logical extent from its physical traversal: a read can visit multiple leaves without restarting at the root for each one. The scan stops as soon as an overlap with CV greater than RV is found. Otherwise, it examines the required candidates up to the read boundary. Section 8 explains the exact conditions and how expired keys are avoided.
-
-## Overall approach: a B+ tree for a longer conflict history
-
-The Resolver uses a **temporal B+ tree** to represent write-conflict history. Its goal is to retain more history within a fixed memory budget while providing an efficient foundation for checking batches of read ranges. Leaves hold ranges and their commit versions; internal nodes locate the relevant part of history by key.
-
-The reference structure is FDB's skip list. The expectation behind the B+ tree is to **group many entries and navigation decisions in each node**, amortizing metadata and index accesses. Higher fanout allows a shallower structure, and block organization offers opportunities for locality and reuse across searches. The goal is not to change logarithmic key-search complexity, but to improve practical behavior and the amount of history that fits in memory.
-
-These expectations have costs. A B+ tree requires in-node searches and maintenance of splits, separators and occupancy. In this design, key bytes also live outside the nodes. Fewer levels therefore do not automatically imply fewer memory stalls or higher speed than the skip list. Retention and resolution time are separate measured outcomes.
-
-| Aspect | B+ tree design expectation | Cost or condition to evaluate |
+| State | Access or work consumed | Next action |
 |---|---|---|
-| Memory per entry | Amortize headers and links over multiple entries | Depends on actual occupancy and reference sizes |
-| Navigation | Reduce levels through higher fanout | In-node comparisons access external keys |
-| Locality | Reuse nodes containing nearby entries | Their key bytes need not be adjacent or already cached |
-| Reclamation | Release blocks and subtrees instead of searching separately for every expired entry | References and separators must remain safe |
-| Batch processing | Use independent searches to anticipate accesses | Grouped traversal is a subsequent version, not a v1 feature |
+| `InspectNode` | Prefetched node | Clean/initialize a leaf or start internal partitioning |
+| `CompareKeys` | Separator and midpoint read | Continue the binary search, split, or descend |
+| `CompareLeafKey` | Leaf entry begin and first read begin | Continue the leaf search or establish scan position |
+| `FindPrev` | Prefetched leaf to the left | Locate its last live entry or move left again |
+| `CheckPrev` | Previous write end and a read begin | Check overlap/CV and select another read |
+| `StartScan` | Saved leaf position and pending-read links | Initialize scanning and enter `scanLeaf` directly |
+| `ScanLeaf` | Prefetched scan leaf | Scan all its relevant pairs, finish, or prefetch its successor |
+| `Empty`, `Done` | No further work | Release the slot at round end |
 
-V1 is the sequential foundation of this architecture. Its representation already anticipates a later grouped-read implementation with selective prefetch. The [evaluation](../resolver/v1/06-evaluation.md) measures the resulting trade-off: substantially greater retention under the same counted-history budget, at a higher execution cost than FDB's skip list.
+Continuations such as `toCompareKeys` issue hints and set the consuming state. `runRound` contains one state dispatch per resident task. Some local handlers call another handler directly when no new memory wait is needed; this is not a second scheduler dispatch. Initial root prefetch occurs before the loop. New siblings issue their first hint when created and begin execution only in a later round.
 
-## Principal design decisions
+![Task visits separate prefetch hints from later consuming accesses, with one scheduler dispatch per task and round.](../resolver/v2/figs/fig-v2-single-dispatch.png)
 
-### Separate nodes from key bytes
+*Figure 5. A task visit consumes previously hinted data and normally issues the next hint before yielding. Other tasks provide distance between hint and use, without guaranteeing completion. New siblings begin after round-end admission; direct handler continuations execute within the same visit.*
 
-Nodes hold index structure, versions, and references to ranges or separators. Key bytes reside in separate record blocks. Node size and capacity therefore do not depend directly on the lengths of their keys: a long key does not enlarge each entry descriptor.
+Node prefetch walks the node block in 64-byte steps. External input keys and stored keys receive at most two cache-line hints. The stored-key fast path uses direct addresses when those hints fit in the first block; the slow path checks validity before reading a header and follows links as needed. Prefetching does not copy a complete long key or guarantee that comparisons will avoid demand misses.
 
-This separation also decouples index order from key-record placement. Bytes are appended sequentially; the tree orders references. Splitting a node moves descriptors without copying all the key bytes they reference.
+![Stored-key prefetch uses a direct same-block path or a validity-checked path across linked key blocks.](../resolver/v2/figs/fig-v2-key-prefetch.png)
 
-**The separation is one of representation, not memory budgets:** both block types come from the same pool. Figure 1 shows a small tree, the key records its entries and separators reference, and the pool blocks that hold both.
+*Figure 6. Stored-key prefetch issues at most two cache-line hints. The common path computes addresses within one key block; a cross-block access checks reference validity and follows block links, skipping headers. Hints neither fetch the entire record nor guarantee cache residency.*
 
-![Where everything lives: a small B+ tree whose leaf entries and separators reference key records in linked key blocks, and the page pool where nodes and key blocks are blocks of the same kind.](../resolver/v1/figs/fig-v1-storage.png)
+### 5. Round-end admission and range priority
 
-*Figure 1. Nodes hold descriptors and references; key bytes live in key records appended to key blocks; both kinds of block come from one pool. Separators reference the same record as the first entry of their child.*
+`endRound` returns immediately if no task completed and no sibling appeared. Otherwise it stages **indices**, not an entire new task array, interleaving each new right sibling immediately after its surviving left partition. Encodings below G identify resident slots; larger encodings identify entries in `newTasks`.
 
-### Reference separator keys instead of storing an inline prefix
+It admits the first G entries of this combined sequence. It copies the excluded suffix to `pending` in reverse order, freeing excluded resident slots before copying selected new tasks into those slots. Selected resident tasks retain their physical slots. Finally, it fills remaining holes from `pending` and reissues the access associated with each resumed task's state; the old prefetched data may have been evicted.
 
-An internal separator references the key representing its child's minimum. It stores neither a copy of that key nor an inline prefix of its bytes. Conceptually it is a pointer to the key; the implementation uses a `KeyRef` containing a block pointer, offset, length and generation.
+For G=3, let the ordered tasks own read slices A=`[0,8)`, B=`[8,16)`, C=`[16,24)`. A splits at 4 and B at 12. The combined sequence is A-left, A-right, B-left, B-right, C. The first three stay active. C is pushed before B-right, so B-right resumes first. This preserves range priority across the suspended suffix without moving surviving resident records. A `newTasks` entry records its parent's **order position**, not its slot index.
 
-The motivation is **to reduce overhead** by avoiding reserved and duplicated prefix bytes in every separator. The same key can represent minima at several levels, with those occurrences reusing its stored bytes. Relative to adding an inline prefix alongside the reference, this avoids that extra space; it does not claim that `KeyRef` is smaller than every possible alternative representation.
+![Round-end admission preserves read-range order while keeping selected resident tasks in their physical slots.](../resolver/v2/figs/fig-v2-task-admission.png)
 
-The trade-off is explicit: comparing a separator generally requires accessing external bytes. An inline prefix could resolve some comparisons within the node. Omitting it means addressing that additional latency. Reference size, prefix savings and external accesses must be evaluated together.
+*Figure 7. Round-end admission interleaves each new right task after its left half and selects the first G tasks. The remaining suffix is copied onto a LIFO stack in reverse order. Selected resident tasks stay in place; new tasks occupy freed slots, and the order array restores visitation by read range.*
 
-### Avoid cascading splits through proactive split preparation
+All unfinished tree work is represented by resident, new or suspended tasks. The scheduler can deepen a resolved child partition while another task remains higher in the tree. A full leaf scan can make a visit longer than other visits; the scheduler is not a uniform-work round-robin system.
 
-An insertion into a conventional B+ tree can trigger a leaf split followed by splits all the way up to the root. The structural work of an individual insertion therefore depends on how many ancestors are also full, causing latency spikes and distributing split costs unevenly across insertions. Figure 2 shows one such insertion.
+### 6. Leaf search and the predecessor
 
-![Conventional B+ tree splits: a single insertion into a full leaf under a full root splits two existing nodes and creates a new root.](../resolver/v1/figs/fig-split-conventional.png)
+On first entry to a leaf in a batch, `cleanReadLeaf` removes expired entries and stamps `lastCleanReadBatch`. The task then searches the cleaned leaf for the first write begin at or after its first read's begin.
 
-*Figure 2. Conventional splits. Inserting j into a full leaf under a full root splits the leaf, then the root, and creates a new root: the work of one insertion depends on how many of its ancestors are full.*
+Equality can terminate this binary search: live history ranges are disjoint, so an earlier write cannot extend across a write beginning at the read begin. Scanning starts at the equal entry. Without equality, the insertion rank is also the forward scan start, but the immediately preceding live write may extend into the read and must be considered first.
 
-To make this work more predictable and distribute it more evenly (at most one split per insert), the tree prepares for splits proactively using the `needsSplit` predicate. A leaf needs splitting when it has at most one free slot, since a write may insert both a new interval and a surviving right exterior. Each internal node tracks how many of its immediate children need splitting through `childrenNeedingSplit`. The internal node itself needs splitting when that count equals its number of free slots: all remaining capacity is already reserved for those potential child splits.
+The saved forward scan location is `task.node.leaf/task.rank`. The predecessor location is independently held in `prevLeaf/prevRank`. `prevRank` is an exclusive cursor: decrement before inspection. At a newly reached left leaf, `UINT32_MAX` signals that the cursor should start at the cleaned leaf's count. The first decrement selects its last entry, at count minus one.
 
-Before inserting a write, the tree splits the deepest node on the search path that satisfies `needsSplit`, if any. Splitting a child consumes one reserved parent slot and removes one pending child split, leaving the parent's balance between free slots and reservations unchanged. This allows each write to split at most one existing node, avoiding a cascade of structural splits within the same insertion.
+`checkPrev` can test the same previous write against several sorted reads. Once a needed read begins at or after that write's end, all later reads do too. Before that point, overlap is established by `read.begin < previous.end`, since the previous write already begins before the first read. Its CV decides conflict. The write-end hint is not repeated for each successive read; each next read begin is prefetched.
 
-During descent, the search records internal nodes that need splitting. After cleanup, it selects the deepest node that still needs a split, giving priority to the leaf. Splitting a child consumes one free slot in its parent but also removes one child from the parent's pending-split count. The parent's own split status therefore remains unchanged, avoiding a cascade.
+### 7. Fused forward scan and pending reads
 
-This mechanism makes split work more predictable by preparing capacity before it is exhausted. It does not make the entire write constant-time: key copying, overlap removal, cleanup and reclamation still depend on the affected data. Figure 3 follows three writes through the mechanism, with `F`, `P` and `needsSplit` at each internal node.
+Each task owns a disjoint slice of read indices. `nextRead` initially links index i to i+1; `readEnd` is that slice's sentinel. `readHead`, `readIndex` and `readPrev` maintain a linked subset of unresolved reads in begin order. Removing a read does not move input records or alter routing boundaries. A suspended task retains its list cursors.
 
-![Proactive splits in v1 through three insertions: each write splits at most one existing node, and absorbing a child split leaves the parent's split state unchanged.](../resolver/v1/figs/fig-split-proactive.png)
+Within a leaf, writes are visited in key order. For each current pending read:
 
-*Figure 3. Proactive splits. A pending leaf is split before the write that targets it; the parent absorbs the sibling in a reserved slot and its split state is unchanged. The parent is split by a later write, before it is full of demand, and a leaf that starts needing a split only moves a counter.*
+1. If the read is no longer needed, unlink it.
+2. If its begin has not already been reached, compare it with the write end. A begin at or beyond that end means this read and all following reads need later writes; advance the write.
+3. If `read.end <= write.begin`, unlink the read permanently: no later write can overlap it.
+4. Otherwise overlap exists. A newer write CV marks conflict and unlinks the read; an older/equal CV leaves it pending for later writes.
 
-### Minimize update overhead with slot permutations and a free-slot bitmap
+After an entry, scanning restarts at the current pending head, not at all original reads. Read ends are not ordered, so an ended read may be removed from the middle rather than advancing a single global start index.
 
-Entries occupy physical slots within each node, while an `order` array represents their logical key order. Each element of `order` is a one-byte slot index. Inserting or deleting an entry therefore shifts bytes in this array rather than moving complete entry descriptors.
+`readReachedEnd` marks the admitted prefix of the sorted begin sequence. Once a begin is below a visited write end, it stays below subsequent write ends because live write intervals are disjoint and ordered. Those begins need no repeated begin/end comparison. The field shares storage with the internal search's `readLo`; the two phases do not overlap.
 
-A bitmap tracks free physical slots. Insertion selects a free slot, writes the new entry there, and inserts its index into `order`. Deletion removes the index from `order` and marks the slot free, without compacting the remaining entries. Subsequent insertions can reuse that slot.
+The scan runs directly through relevant pairs for the whole leaf. There is no scheduler round or explicit pair-level prefetch between each comparison. At a leaf boundary it prefetches the right leaf and yields. A task finishes when its pending list is empty or the leaf chain ends. Long reads continue beyond their initial destination leaf, and different tasks can scan the same physical leaf for different read slices.
 
-Together, the permutation array and bitmap keep surviving entries in place during ordinary insertions and deletions, reducing data movement. Splits still move entries between nodes. Figure 4 compares the bytes moved by an insertion and a deletion with those of a sorted descriptor array.
+![A leaf scan maintains a linked subset of unresolved reads and avoids repeating begin comparisons for reads already reached.](../resolver/v2/figs/fig-v2-leaf-scan.png)
 
-![Insertion and deletion in a node: a sorted descriptor array shifts whole 32-byte descriptors, while v1 shifts one-byte slot indices in order[] and leaves descriptors in their physical slots.](../resolver/v1/figs/fig-order-bytes.png)
+*Figure 8. Reads remain linked in begin order until they conflict, end before the current write, or become unnecessary. Unlinking removes resolved reads without moving input records. The reached-begin prefix grows monotonically, avoiding repeated begin comparisons. All shown writes are processed within one leaf-scan visit.*
 
-*Figure 4. What moves on an insertion or a deletion. A sorted array shifts descriptors of 32 bytes; v1 writes the new descriptor into a free slot and shifts one-byte indices in `order[]`, leaving every surviving descriptor in place.*
+### 8. Expired separators and deferred cleanup
 
-### Prepare for grouped traversal and selective prefetch
+An internal separator is a copied reference to a child's former minimum. Reclaiming key blocks can invalidate that reference even when the child still contains live history. Checking an old separator without refreshing it can read reused bytes and route incorrectly.
 
-The separation also anticipates the next version: keep several searches in flight, determine which keys each needs to compare, and prefetch those keys while advancing other searches in the group.
+`toCompareKeys` checks the chosen separator's CV **before issuing a key hint**. If it is expired and not already marked empty, `refreshSeparatorDeferred` searches for the child's first live key, reading versions before key bytes. A live result replaces the reference and CV. The refresh can descend synchronously without prefetching and stall the visit. Refreshing only the selected separator avoids visiting children whose keys the partition search may never use.
 
-The intent is to **overlap external-key latency with useful work on other reads**, without allocating prefixes in every separator whether needed or not. The traversal anticipates the keys it will use; it need not copy keys into nodes or fetch every key referenced by every visited node.
+If a child has no live entry, the helper can borrow a live neighbor's reference and mark an empty run with `EmptyChildCV`. If no child is live, it marks every child empty and leaves all old key references unread. **An empty marker is not a key to compare.** Partitioning treats it as above the current reads and narrows toward the left. Forward scans through the linked leaves can recover later live writes; routing to the right could skip an overlapping predecessor.
 
-V1 processes reads individually. This motivation explains the intended evolution; it does not attribute the subsequent grouped implementation or its measured improvements to v1. Nor does it guarantee hiding all latency: prefetch distance, dependencies, keys actually compared and available bandwidth matter.
+A task must survive even when its current subtree has no live entries: a long read can extend into a live subtree to its right.
 
-### One shared physical storage pool for keys and nodes
+![Expired separators are repaired before key prefetching; empty subtrees preserve read tasks that may overlap later history.](../resolver/v2/figs/fig-v2-separator-refresh.png)
 
-A single memory pool, organized into reusable pages and blocks, holds both nodes and key records. The classes separate responsibilities over that common storage:
+*Figure 9. Before hinting a selected separator key, the traversal checks its CV and refreshes an expired reference from live history. The synchronous refresh may stall, but never reads reclaimed key bytes. If every child is empty, empty markers route reads conservatively left; forward leaf scans can still discover overlapping writes in later subtrees.*
 
-| Element | Responsibility | Relationship to memory |
-|---|---|---|
-| `PagePool` | Maintain pages, free blocks and the budget | The common physical pool |
-| `KeyStore` | Manage key records, references, comparisons and key-block reclamation | Uses blocks from the common pool |
-| `BNodeStore` | Manage nodes, slots, local operations and age tracking | Uses blocks from the same pool |
-| `TempConflictBTree` | Coordinate searches, writes, topology and reclamation | Combines both forms of management under the shared budget |
+Refreshing does not erase child entries from internal nodes while tasks have saved bounds there. `firstLiveKey` queues leaves for cleanup; it does not compact their ranks immediately. Actual leaf-entry compaction occurs on that leaf's first traversal visit and then only once per batch. The cutoff is fixed, no writes are added, and later visits see the same cleaned ranks. Empty leaves remain linked and allocated through traversal, preserving predecessor and successor paths.
 
-There is no fixed quota for either data type. A block released by a node can hold keys next, and vice versa. `KeyStore` and `BNodeStore` name specialized managers, not independent physical memory reservations. Section 2 explains allocation in detail.
+![Leaves are cleaned once per batch before positions are saved; empty leaves are released only after traversal finishes.](../resolver/v2/figs/fig-v2-leaf-cleanup.png)
 
-### Separate logical order, version and physical lifetime
+*Figure 10. The first traversal visit cleans expired entries and stamps the leaf with the read-batch number. Later visits preserve the same rank mapping. Empty leaves remain linked until all tasks finish; deferred cleanup then removes them, using node generations to skip duplicate records for released leaves.*
 
-Within a node, descriptors occupy slots and a small array expresses key order. Order can change without moving every descriptor. Versions determine which history remains relevant; generations identify references to reclaimed blocks. These are distinct concerns: an expired entry's bytes do not necessarily disappear immediately.
+Once all resident and suspended tasks finish, `cleanPending` checks each queued node generation, cleans expired entries, removes empty leaves and empty ancestors, and normalizes the root. Duplicate cleanup records for an already released node are skipped. No allocations occur during this drain, so released blocks are not reused before the queue empties.
 
-Reclamation coordinates all three. It must recover memory without comparing freed keys, preserve correct navigation, and maintain the semantics of admitted reads. The following sections develop the invariants and algorithms.
+### 9. Write maintenance and reclamation retained from v1
 
-### Keep point intervals compact by sharing endpoint bytes
+`addWrite` reserves a conservative block allowance, descends with separator refresh, identifies the deepest node on the path still needing a split, splits at most that existing node, and inserts the new range. It preserves a left exterior before insertion and a possible right exterior after removing covered entries. The prepared leaf remains the insertion destination even when the overlapping predecessor is in its left neighbor.
 
-Point writes should not pay for two copies of the same key. FDB's resolver skip list represents an isolated point interval `[k, k\0)` with separate boundary nodes for `k` and `k\0`, duplicating the bytes of `k`. Resolver v1 instead represents the interval with one leaf entry and shares the stored bytes between its begin and end keys.
+A leaf needs a split when it lacks room for both a new write and a possible right exterior. Internal nodes reserve one free child slot per child needing a split; equality between free slots and pending child splits marks the internal node as needing a split. Splitting a child consumes one free slot and removes one pending split, preserving the parent's reservation balance. Internal splitting uses child weight, counting children needing splits twice. Root creation can accompany the one existing-node split.
 
-The goal is to retain the general half-open range model while avoiding this redundancy for points. The record stores `k\0` once; the begin key is its prefix `k`. This reduces endpoint storage for point intervals, leaving more of the shared memory budget available for retained history. Section 4 explains the encoding and its byte savings.
+![A conventional insertion splits a leaf and its full parent, creating a new root.](../resolver/v2/figs/fig-v2-split-conventional.png)
 
-## Organization of the technical detail
+*Figure 11. A conventional split can cascade upward: inserting j splits leaf L2, then its full parent R, and creates a new root T. Proactive capacity reservation prevents this cascade, as Figure 12 illustrates.*
 
-After the resolver's role, write materialization, read queries and overall decisions, this document describes the semantic contract, physical representation, invariants and operations. The rationale for separating key bytes, omitting inline prefixes and planning grouped reads connects these mechanisms to the overall design.
+![Proactive splitting reserves parent capacity and avoids cascading splits.](../resolver/v2/figs/fig-v2-split-proactive.png)
 
-## 1. Semantic contract
+*Figure 12. Proactive capacity reservation limits each write to splitting at most one existing node. Inserting h splits L2; inserting m splits R and creates a new root; inserting i only updates the pending-split count. Splitting a child consumes one free parent slot and removes one pending split, preserving F−P.*
 
-The tree stores retained write-conflict intervals in lexicographic key order. Intervals are half-open, `[begin,end)`, and live entries are disjoint. Each entry has a commit version, CV. A read at version RV conflicts when it overlaps an entry whose CV is greater than RV. 
+Reclamation compares the oldest key-block age with the oldest node age and advances `reclaimCV_` monotonically. Whole expired subtrees can be detached and released; expired leaf entries are later removed without reading their key bytes. Node and subtree maximum CVs remain conservative upper bounds. The pool budget determines how much history can be retained; transaction admission must respect the resulting cutoff.
 
-The logical representation retains the relevant most recent write information per covered key range, not every historical write as a separate overlapping record. Accepted writes arrive sorted and disjoint within a call, share the same CV, and use nondecreasing CVs across calls. Replacing an overlap with the new CV is valid under that contract; portions outside the write retain their previous CV.
+## Alternatives considered
 
-The caller must reject reads older than the retained-history boundary before `checkReads`. The code assumes no reclamation while key bytes are in use. 
-
-## 2. Shared pool, responsibilities and allocation
-
-`TempConflictBTree` owns the common physical pool (`PagePool`), the key manager (`KeyStore`), the node manager (`BNodeStore`), the root pointer, and `reclaimCV_`. Both managers obtain blocks from the same pool; they are not independent physical stores. `BNodeStore` also uses `KeyStore` to compare referenced keys. The tree coordinates topology and reclamation; each manager implements local operations for its data type.
-
-`common.h` fixes `PageSize = 64 * KiB` and `BlockSize = 2 * KiB`. A page contains 32 blocks. `Page` is aligned to the page size; its size is statically checked. The pool allocates `floor(budget / PageSize)` pages and initializes an intrusive free-block list. Allocation pops its head; release puts a `FreeBlock` record in the freed storage and pushes it back. Both are constant-time local list operations.
-
-A block can be reused for either a node or key records. There is no fixed partition between those uses. The pool's `allocatedBytes()` counts page storage; it does not measure total process memory, allocator bookkeeping, or transient vectors. The tree uses a path vector during search and `KeyStore` uses a vector during append, so “shared bounded pool” must not be misrepresented as “no allocations outside the pool.”
-
-## 3. Node layout and ordering
-
-`BNodeHeader` contains a generation, conservative `maxCV`, intrusive age-list links, parent pointer, node kind, count, parent slot, and `childrenNeedingSplit`. Counts and slots are represented with 8-bit fields; capacity calculation caps a node at 255 slots.
-
-| Internal node | Leaf |
+| Alternative | Reason for the implemented choice |
 |---|---|
-| `maxSubtreesCV[]` | `cv[]` |
-| `separatorsCV[]` | `ranges[]` of `RangeRef` |
-| `separators[]` of `KeyRef` | Left/right leaf links |
-| `children[]` | Free-slot bitmap |
-| Free-slot bitmap and `order[]` | `order[]` |
+| One read per descent | Simple reference path, but repeats navigation and offers less batch reuse |
+| Breadth-first frontier or two G-sized groups | Replaced during development by a single G-slot task set plus staged/suspended work |
+| Scheduler transitions for every scan pair | Too much dispatch and prefetch overhead; scans now run to leaf boundaries |
+| Separate prefetch and work dispatches | One consuming-state dispatch reduced measured scheduler overhead |
+| Contiguous suffix of unresolved reads | Read ends are not sorted; a linked subset removes ended reads anywhere in a slice |
+| Eager refresh of every expired separator | Can touch unneeded subtrees; v2 refreshes only a separator about to be used |
+| Immediate removal of empty nodes | Invalidates saved ranks, parent bounds and leaf links; structural release is deferred |
+| Stable pool of all task objects | Not implemented: resident tasks stay in place when selected, but suspended/new tasks are copied |
+| Unified read/write traversal | Requires deferring write application until transaction acceptance and maintaining write destinations; reserved for v3 |
 
-`order[rank]` maps logical sorted position to physical slot. Insertions allocate the lowest free slot and shift only the order array; deletion shifts that array and marks the physical slot free. Surviving descriptors stay in place during these local operations. Splits do move descriptors to a different node.
-For example, suppose a node contains keys `10`, `30`, and `50` in physical slots `2`, `0`, and `4`:
+The [design history](../resolver/v2/04-decisions-and-evolution.md) records the experiments behind these choices, including the move from per-pair scheduling to whole-leaf scans and a single dispatch per task visit.
 
-| Logical rank | `order[rank]` | Key |
-|---|---|---|
-| 0 | 2 | 10 |
-| 1 | 0 | 30 |
-| 2 | 4 | 50 |
+## Testing considerations
 
-To insert key `20`, the node allocates slot `1`, the lowest free slot, and inserts its slot number at logical rank `1`. The order array changes from `[2, 0, 4]` to `[2, 1, 0, 4]`. The existing entries remain in slots `2`, `0`, and `4`.
-Deleting key `30` then removes slot number `0` from the order array, leaving `[2, 1, 4]`, and marks physical slot `0` free. The remaining keys—`10`, `20`, and `50`—stay in their physical slots.
+The main correctness cases are half-open boundaries, duplicate begins, unordered read ends, complete reporting, transaction-level skipping and too-old admission. Traversal tests also need root leaves, cross-leaf predecessors, long scans, more than G tasks, and cleanup when several tasks visit the same leaf. Differential tests compare per-read and transaction decisions against a direct history model or `hasConflict`, using the same admission rules.
 
-`FreeSlots<C>` uses one 64-bit word for capacities up to 64 and multiple words for larger capacities. It uses population count and count-trailing-zero operations for counts and allocation. The layouts are chosen by a compile-time search for the largest capacity whose `sizeof` fits the block. The 2 KiB campaign configuration supports 40 children and 59 leaf entries. These capacities are ABI-dependent layout results, not universal mathematical constants.
+Separator tests must reclaim old key bytes and reuse their pool blocks; merely marking entries expired can leave a stale reference readable and hide the bug. Cases include a surviving child, empty runs beside a live child, and wholly empty internal subtrees followed by live history to the right. Sanitizers help detect invalid accesses, but generation and version guards are still needed when a pool address is reused.
 
-`parentSlot` names a physical slot, not a rank. Reordering `order` does not change that slot. `parentRank()` scans the parent's order array to recover the logical rank; it is not an O(1) rank lookup. Moved children have their parent and parent slot updated during splitting.
+The [validation report](../resolver/v2/07-evidence-and-validation.md) describes the tests performed, the source versions they cover, and the remaining gaps.
 
-## 4. Key and range storage
+## Observability and supportability
 
-`KeyBlockHeader` carries `nextBlock`, a generation and `maxCV`. Records append sequentially into the open block, continuing through linked blocks when necessary. Logical record bytes skip block headers; physical address arithmetic alone cannot locate a distant byte across a block boundary.
+Performance measurements separate read checking from write application and record transaction decisions, per-read conflicts, too-old counts, pool usage, batch memory, reclamation events and retained age. Diagnostic counters for key comparisons, node and leaf visits, task copies and resumptions, scheduler visits and separator refreshes help explain changes. Runs with those counters should be reported separately from uninstrumented timings unless their overhead has been measured.
 
-`KeyRef` holds a first-block pointer, 16-bit offset and length, and a generation. `RangeRef` holds a first-block pointer, offset, begin length, end start, end length and generation; a compile-time assertion fixes its size at 24 bytes.
+Each result needs its workload, seed, key distribution, interval lengths, read-version ages, commit rate, G, block size, pool backing and budget. Paired runs in the same session reduce the effect of machine load and frequency changes. IPC should be read alongside instruction counts and memory events: similar IPC can conceal different amounts of work or memory waiting.
 
-For a general range, begin bytes are followed by end bytes in the logical record stream. A point range `[k,k\0)` stores only the bytes of its end: the begin is the prefix of that same record, and `endStart` is zero. Both endpoint references therefore address the same starting byte, with different lengths.
+The [evaluation](../resolver/v2/06-evaluation.md) compares read and write performance across the benchmark workloads and examines history retention under a fixed memory budget. Grouped reads improve several workloads, while write application accounts for most of the measured long-trace runtime. Results vary by workload; v2 does not consistently outperform FDB.
 
-For example, the point interval `["abc", "abc\0")` has the following encoding:
+## Integration and migration
 
-| Field | Value |
-|---|---|
-| Stored record bytes | `61 62 63 00` (hexadecimal) |
-| Begin length | 3 bytes |
-| End start | 0 bytes from the record start |
-| End length | 4 bytes |
+The tree is held in memory, so replacing v1 requires no on-disk format migration. The FDB adapter and the tree share batch-record definitions through `ResolverBatchTypes.h`. The build must link an explicit `checkReads<G>` instantiation for the selected task capacity.
 
-The begin key reads the first three bytes; the end key reads all four. The record contains one copy of `abc`, not two.
-
-This realizes the point-efficiency decision introduced above. For a point key of length `L`, separate copies of the two endpoints require `2L + 1` key bytes; the shared representation requires only `L + 1`, saving `L` bytes per point interval. A 16-byte key therefore needs 17 endpoint bytes instead of 33. The interval also occupies one leaf descriptor, whereas an isolated point in FDB's skip-list history uses separate begin and end boundary nodes.
-
-These figures compare endpoint payloads, not total memory: descriptors, block headers, node occupancy and allocation slack must also be counted. Existing boundaries and merged intervals can change the number of skip-list nodes required. Point endpoints share a single stored payload.
-
-Append first computes the number of blocks required and allocates all required new blocks before modifying existing key storage. Failure returns the new allocations and reports `nullopt`. Copying accepts either external contiguous bytes or an existing stored key, traversing block links as necessary. Each touched block raises its maximum CV to include the record's supplied CV. A full block may be followed by a newly allocated empty open block when space permits.
-
-Comparisons use `memcmp` on available chunks, continuing through linked blocks only when needed. Equal prefixes are ordered by total length. `locate` walks the record stream, skipping headers, to find the end key's start. References need not imply contiguous physical storage for the whole key.
-
-## 5. Lifetime and generation checks
-
-Key blocks are reclaimed in allocation order. `lastReclaimedKeyGeneration_` records the generation of the most recently released block. A nonempty key reference is valid when its recorded generation exceeds that boundary. A range uses the same generation test. Empty `KeyRef` values are treated specially as valid.
-
-This test does not dereference the potentially reused block. Figure 5 shows it on three stored references after a reclamation. Reclamation order matters: while the first block of a record remains live, later continuation blocks cannot have been reclaimed ahead of it. Once the first block is reclaimed, the record is invalid even if some later bytes remain allocated.
-
-![Generation check: after reclaiming the two oldest key blocks, a reference is valid exactly when its generation exceeds lastReclaimedKeyGeneration; stale references are detected with one compare and never dereferenced.](../resolver/v1/figs/fig-generation.png)
-
-*Figure 5. Validating a reference after reclamation. Key blocks are released in allocation order, so one counter bounds every released block; a reference whose generation is at or below it is invalid and is never dereferenced, even when its pool block has been reused.*
-
-Age and physical lifetime are related but different. An entry can be logically expired even while its bytes are still allocated. A key block may contain several records and is governed by its maximum CV. The tree checks entry or separator CV before accessing bytes that could have been reclaimed.
-
-## 6. Structural and temporal invariants
-
-| Invariant | Why it matters |
-|---|---|
-| Live leaf entries are ordered and disjoint | A predecessor plus a forward scan suffices for overlap checking |
-| Every live rank maps to an occupied physical slot | Order-array navigation and bitmap allocation agree |
-| Each child points back to the correct parent slot | Upward propagation and removal locate the right descriptor |
-| Each internal node has at least as many free slots as children needing a split | Every pending child split has a reserved parent slot |
-| Leaf links follow global key order | Range scans and cross-leaf exterior handling remain correct |
-| Separators represent child minima after required refresh | Descent selects the correct child |
-| Expired separators are refreshed before comparison in v1 | Reclaimed key bytes are not compared |
-| Node/subtree maximum CVs are conservative upper bounds | Removing an old subtree cannot discard newer entries than its bound |
-| `reclaimCV_` never decreases | Previously discarded history is never advertised as restored |
-| Only the root leaf may remain empty at an operation boundary | Neighbor traversal may assume nonempty linked leaves |
-| No reclamation occurs while a stored key is being accessed | References used within an operation remain safe |
-
-Separators can be stale between cleanup points. Their CV is the CV associated with their referenced minimum, not the commit that happened to promote that key during a split. Node allocation CV and node maximum CV serve a different, conservative accounting role.
-
-## 7. Search and cleanup on descent
-
-`findKey` descends from the root. Before searching an internal node it calls `refreshSeparators`, which visits all logical ranks in that node. An expired separator is refreshed recursively from its child; a leaf child is cleaned by removing expired entries, and an empty child is removed. If a removal exposes another child at the same rank, the iteration rechecks that rank.
-
-After refresh, binary search returns an exact match or an insertion rank. For an inexact internal search, the preceding child is selected when the rank is positive. At the leaf, expired entries are cleaned and a binary search finds the position of the requested begin key.
-
-The descent records internal nodes needing splits. After cleanup, `findSplitCandidate` prefers the leaf if it needs a split; otherwise it revisits recorded candidates from deepest to shallowest because cleanup may have changed their status.
-
-`hasConflict` calls `findKey`, which cleans expired entries and can remove empty nodes during descent. Reads therefore may modify the physical structure through cleanup, but they do not add logical write history or invoke the pressure-reclamation loop.
-
-## 8. Read-conflict checking
-
-`checkReads` handles each input range individually. It skips a transaction whose status is already conflicting and does not clear an existing conflict flag. This API is a status-only sequential path; it is not by itself the full native FDB conflict-report adapter.
-
-`hasConflict` locates the begin key. If no leaf exists it returns false. On an inexact match it examines the predecessor, potentially in the previous leaf. That predecessor conflicts if its CV exceeds the read version and its end is greater than the read begin. CV is tested first so an expired key is not accessed.
-
-It then scans candidate entries in key order. Entries at or below `reclaimCV_` are skipped without reading their keys. The scan ends when a live entry's begin is at or beyond the read end. A live overlapping entry with CV greater than the read version returns conflict immediately; exhausting candidates returns false.
-
-V1 performs sequential read searches without grouped scheduling or explicit prefetch. A scan may cross multiple leaves, and its cost depends on the number of candidate entries.
-
-## 9. Write processing and exterior preservation
-
-`addWrites` calls `addWrite` for each sorted disjoint input range. `addWrite` asks reclamation for a reserve of 35 blocks, finds the insertion location, splits a selected candidate if necessary, then appends the new range bytes. The reserve is an implementation constant sized for the key copies an update can require.
-
-The write is inserted in the leaf prepared by `findKey`. A predecessor may reside in that leaf or its left neighbor. If it overlaps the write begin, the left exterior is copied with its original CV and replaces the predecessor's range reference. If the write ends strictly inside that predecessor, a right exterior is also copied with the original CV and inserted immediately after the new write in the prepared leaf.
-
-Otherwise, after insertion, covered entries are erased moving forward. Expired entries are erased without reading their keys. The first partially covered survivor is trimmed to `[newEnd,oldEnd)` and keeps its old CV. If that changes the first entry, the separator is propagated upward.
-
-Example: `[a,z)@10` plus `[c,g)@20` yields `[a,c)@10`, `[c,g)@20`, `[g,z)@10`. A later version is not assigned to surviving exteriors merely because their bytes were copied now. Their block's maximum CV still safely accounts for whatever records it contains.
-
-An expired predecessor is removed after inserting the new write, avoiding a transient empty target that could invalidate the insertion position. Deletion helpers return a meaningful next position, which may be in the right neighbor or at the end of the last leaf.
-
-## 10. Proactive split preparation and execution
-
-### 10.1 Reserve capacity before a node overflows
-
-The mechanism avoids a structural split cascade by tracking future demand for parent slots. `needsSplit` is a predicate computed from node state, rather than an independent flag. For a leaf it is:
-
-```cpp
-needsSplit(leaf) = (leaf->freeSlotCount() <= 1)
-```
-
-A write may add two entries to the prepared leaf: the new write interval and a surviving right exterior. Two free slots are therefore sufficient to perform the write without splitting during insertion. The resulting leaf may need a split for a future write; that transition is recorded immediately.
-
-For an internal node, let `C` be its capacity, `N` its child count, `F = C - N` its free-slot count, and `P = childrenNeedingSplit` the number of immediate children for which `needsSplit` is true. The capacity invariant is:
-
-```text
-P <= F
-needsSplit(internal) = (P == F)
-```
-
-Each pending child split reserves one parent slot. Equality means that every free slot is reserved, not necessarily that the node is physically full. This is the proactive threshold: splitting the internal node restores room before additional demand can exceed its capacity.
-
-### 10.2 Select one split on the write's search path
-
-`findKey` records internal nodes satisfying `needsSplit` as it descends. After cleaning the destination leaf, `findSplitCandidate` selects:
-
-1. The leaf, if it needs a split.
-2. Otherwise, the deepest recorded internal node that still needs a split.
-3. No node if neither condition holds.
-
-Candidates are checked again because cleanup can remove entries or children and release reserved capacity. `addWrite` then splits the selected node before inserting the write. If the selected node is internal, the destination leaf already has at least two free slots; splitting the internal node changes its ancestry, not the insertion position within the leaf.
-
-Only one existing node is split by this preparation step for each `addWrite`, not one per level. Splitting the root additionally creates a new root. Searches performed for read checks do not execute this write-side split step.
-
-### 10.3 Why a child split does not force its parent to split
-
-The selected node already contributes one unit to its parent's `childrenNeedingSplit`. Splitting it creates two children that do not need splitting. Installing the new sibling consumes one free slot and removes the original child's pending-split contribution:
-
-```text
-F' = F - 1
-P' = P - 1
-F' - P' = F - P
-```
-
-The parent's spare capacity relative to reserved demand is unchanged. If `P == F` before the child split, equality remains true afterwards; if `P < F`, it remains strict. Consequently, the child split does not trigger a new split-state transition in the parent and requires no cascading structural split. Because the selected child was counted, `P >= 1`; the invariant guarantees the parent has at least one free slot for its new sibling.
-
-A parent's split state may still change later when the write makes another child need splitting. That change propagates as metadata, not as an immediate chain of node splits. Choosing the deepest pending node means that the nodes below a selected internal candidate were not themselves pending after cleanup. Its split restores slack before the current insertion can propagate new demand upward.
-
-### 10.4 Maintain the counters on state transitions
-
-`propagateUpdates` carries a `splitDelta` of `+1` when a node changes from not needing a split to needing one, and `-1` for the reverse transition. Its parent adjusts `childrenNeedingSplit` and recomputes its own predicate. The delta continues to the next ancestor only if the parent's split state also changes.
-
-Inserting an entry can raise the leaf's split demand. Deletion or cleanup can lower it. Removing a child also frees a parent slot and removes its pending contribution when applicable. Moving children during an internal split redistributes their pending counts between the two halves.
-
-This bookkeeping may traverse ancestors, but it does not split those ancestors. The structural split and propagation of split-state changes are distinct operations.
-
-### 10.5 Split the selected node while preserving reservations
-
-A leaf splits at half its entry count. The upper half moves into a new leaf, neighbor links are repaired, and the caller's leaf/rank pair is adjusted. A missing key exactly at the cut rank remains at the end of the old leaf because it is below the new leaf's first key. An exact key at the cut rank moves with that entry. Both halves have enough free capacity to stop needing a split.
-
-An internal node is split by **weight**, rather than child count alone. A child that needs splitting has weight two: one slot for itself and one reserved slot for its future sibling. Other children have weight one. Thus total weight is:
-
-```text
-W = N + P
-```
-
-At the proactive threshold, `P = C - N`, so `W = C`. The implementation chooses a prefix reaching approximately half the weight and moves the remaining children into a new internal node. Balancing this weight distributes both current occupancy and pending growth. In the supported layout, each half is left with `N + P < C`, equivalently `P < F`, so neither half needs splitting.
-
-Moved children receive the new parent pointer and physical `parentSlot`. Their subtree bounds and separators move with them, and `childrenNeedingSplit` is redistributed. `insertSibling` installs the new sibling immediately after the old node. If the old node had no parent, a new root is created containing both minima. Otherwise, the parent consumes the reserved slot as described above.
-
-### 10.6 Example: absorb a leaf split, then split its parent proactively
-
-For readability, consider internal nodes with capacity **8 children**. These are illustrative capacities, not the 40-child capacity of the v1 build. Suppose internal node `A` contains six leaf children, two of which need splitting. `A` therefore has two free slots and two pending child splits: it already satisfies `needsSplit`, although it is not full.
-
-Assume `A` has a parent `R` with capacity eight, five children, and no pending child other than `A`. Its state is `F = 3`, `P = 1`.
-
-A write targets a pending leaf under `A`. Both `A` and the leaf are candidates, but the leaf is deeper and is selected. Its split creates a sibling that fits in a reserved slot of `A`:
-
-| State of `A` | Children `N` | Free slots `F` | Pending children `P` | `needsSplit(A)` |
-|---|---:|---:|---:|---|
-| Before splitting the leaf | 6 | 2 | 2 | true |
-| After installing the leaf's sibling | 7 | 1 | 1 | true |
-
-`A` gains a child but remains in the same split state. `R` still counts `A` once. Neither internal node is split by that write. Assume the resulting leaf remains below its split threshold after insertion.
-
-A later write targets a different leaf under `A` that has at least two free slots. That leaf does not need splitting, so `A` is now the deepest pending candidate. Its seven children include one pending child, giving total weight `7 + 1 = 8`.
-
-For example, let the child weights in key order be `[1, 1, 2, 1, 1, 1, 1]`. The split cuts after the third child, producing:
-
-| Half | Children `N` | Pending children `P` | Weight `N + P` | Free slots `F` | Needs split? |
-|---|---:|---:|---:|---:|---|
-| Original `A` | 3 | 1 | 4 | 5 | no |
-| New sibling | 4 | 0 | 4 | 4 | no |
-
-Installing the sibling changes `R` from five to six children. Its free slots decrease from three to two, while its pending count decreases from one to zero. Its spare capacity `F - P` stays at two. The internal split has again been absorbed without splitting the parent, and the current write can proceed in its already prepared leaf.
-
-The two writes perform a leaf split and an internal split at different times instead of forcing both into one insertion. This example also shows why a node can remain marked by `needsSplit` after absorbing a child split: its existing reservations remain valid until a later write selects it for proactive preparation.
-
-### 10.7 Scope of the predictability guarantee
-
-The mechanism bounds the number of existing nodes structurally split by the preparation step of an individual `addWrite` to one, under the maintained invariants. A batch can contain many writes and therefore many such steps. Creating a root, moving entries within the selected split, and propagating metadata still require work.
-
-It does not make the entire write constant-time or give a fixed latency bound: key copying, overlap removal, cleanup and reclamation depend on the affected data. The specific source of unpredictability removed here is the chain of structural splits caused by overflowing successively higher ancestors.
-
-## 11. Propagating changes upward
-
-`propagateUpdates` combines three independent effects in one ascent:
-
-- A split-status delta changes `childrenNeedingSplit`; it continues only while an ancestor changes split status.
-- A new minimum updates the parent's separator and its CV; it continues only while the affected child is the first child.
-- A larger node maximum updates the parent's subtree bound and, if needed, raises the parent's own maximum and age-list position.
-
-The minimum key and its CV are obtained once for separator propagation. Repetition along a first-child chain reuses that same reference. No additional reverse pointer in key records is needed for this ascent: parent and parent-slot links already exist.
-
-## 12. Deletion and root normalization
-
-Removing a leaf entry updates split state and, when appropriate, its minimum. An emptied nonroot leaf is unlinked and released; ancestors left empty are removed. The root is normalized: an empty root is released, and an internal root with one child is replaced by that child.
-
-Removing an internal child detaches the subtree's contiguous run of leaves from the global leaf chain. The detached root loses its parent link. The subtree can then be released recursively, children first. This is bulk detachment, not constant-time physical release: releasing a subtree still visits its nodes.
-
-The tree does not redistribute entries between siblings or merge partially filled nodes. It removes empty nodes and normalizes the root. Node occupancy under repeated insertions and deletions therefore depends on the workload; the tree does not enforce the minimum occupancy guaranteed by conventional B-tree rebalancing.
-
-## 13. Age tracking and pressure reclamation
-
-Nodes belong to an intrusive age list ordered by their conservative maximum CV. Allocation appends at a nondecreasing CV. Raising a node's maximum moves it to the tail unless already there. Deletions do not lower maxima. This avoids recomputing exact ages after every deletion but may delay reclamation of an otherwise old subtree.
-
-`reclaimOldest` considers the oldest key block and the oldest node, chooses the smaller available CV, and raises `reclaimCV_` with `max(previousCut,chosenCV)`. It removes nodes at the chosen age, including their subtrees, and releases key blocks at that age. The cutoff remains monotone even when a later-allocated key block contains only older copied exteriors.
-
-`reclaimUntilAvail(n)` repeats until enough free blocks exist or nothing remains reclaimable. Logical expiry can leave descriptors in surviving nodes whose keys have already gone; version checks and refresh prevent those descriptors from being used unsafely.
-
-The policy discards history to satisfy a local budget. Integration with a protected distributed minRV is a separate contract, not a feature demonstrated by this local cutoff alone.
-
-## 14. Costs, limits and review targets
-
-Binary search within a node performs logarithmic key comparisons; each comparison can traverse multiple key blocks. Descent cost includes separator refresh and local cleanup. Range reads add the scanned entries. Writes add copied key bytes, covered entries removed, and structural work. Reclamation can release whole subtrees and is not bounded to one node.
-
-The design trades pointer-dependent external key accesses for compact reusable node blocks and append-oriented key storage. Conservative ages trade prompt reclamation for cheaper metadata maintenance. Rank arrays trade a small indirection and order-array shifts for stable physical slots.
-
-Allocation reserve sufficiency remains a validation target for maximum-length keys and small pools. The [evidence register](../resolver/v1/07-evidence-and-validation.md) separates campaign validation from remaining coverage requirements.
-
-
-## 15. Resolver batch processing
-
-The integration preserves FDB's batch pipeline:
-
-1. Check read-conflict ranges against retained history, including local
-   age checks.
-2. Resolve conflicts within the batch in transaction order using
-   `MiniConflictSet`.
-3. Combine accepted writes and insert them at the batch commit version.
-4. Perform cleanup at the batch boundary.
-
-Conflict-range reporting, transaction order and the exemption for
-transactions without read-conflict ranges remain unchanged.
-`transaction_too_old` remains distinct from a detected conflict.
-Extended retention does not change serializability semantics.
-
-## 16. Integration and recovery
-
-### 16.1 Commit Proxy routing
-
-Commit Proxies retain the assignment history needed to route conflict
-checks across Resolver reassignments. Routing, pruning and recovery
-rules are specified in [Commit Proxy design](01-commitproxy.md).
-
-### 16.2 Recovery
-
-A new Resolver starts with an empty tree and empty key storage and inherits no
-history from the previous instance. Its validation
-boundary is initialized as described above, before processing recovery
-batches or ordinary requests.
-
-FoundationDB's existing recovery determines the outcome of unfinished
-work. The explicit validation boundary replaces reliance on a fixed-size
-recovery version jump for rejecting older read versions.
-
-### 16.3 Component lifetime and integration
-
-The page pool outlives the key and node managers. Tree teardown completes
-before referenced key storage is released, and age-list entries are
-detached before their blocks are reused.
-
-Extended retention is enabled only after capacity enforcement, validation,
-routing and recovery have been integrated and validated together.
-
-## 17. Validation methodology
-
-Component tests compare conflict decisions with an independent
-write-history model and verify interval replacement, endpoint lifetime,
-tree structure and reclamation under memory pressure. Integration tests
-and FoundationDB's deterministic simulation exercise batch processing,
-recovery and failures.
-
-Performance comparisons replay recorded resolver traces through both the
-original skip list and the B+ tree under the same counted-history budget.
-Comparisons require identical offered work, identical conflict decisions
-and no additional `transaction_too_old` rejections. Retention is measured
-as the history each implementation holds under that budget; execution time
-is measured in separate, isolated rounds on one pinned core with diagnostic
-instrumentation disabled. Profiling runs are separate from timing runs.
-Results are reported with the milestone they belong to, starting with
-[resolver v1](../resolver/v1/06-evaluation.md).
-
-## 18. Implementation status
-
-The sequential temporal B+ tree (resolver v1) is implemented, integrated
-for testing and evaluated against the original skip list under a 6 GiB
-history budget. Grouped traversal of read checks and selective prefetch of
-the keys they compare are the next planned optimizations; the current
-representation is prepared for them but does not implement them.
-
-System-wide routing, recovery and removal of fixed-window limits remain
-prerequisites for enabling extended transactions.
+The adapter must supply transaction statuses and read offsets and translate the returned conflict bitmap into FDB's per-read reporting format. Integration tests must compare transaction decisions, per-read reporting and too-old counts against the native resolver path.

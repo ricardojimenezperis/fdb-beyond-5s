@@ -100,7 +100,9 @@ Component designs:
 
 The sequential Resolver (v1) is implemented, integrated for testing and
 evaluated against the original skip list under an equal memory budget; its
-milestone snapshot is under [`resolver/v1/`](../resolver/v1/README.md).
+milestone snapshot is under [`resolver/v1/`](../resolver/v1/README.md). The
+grouped Resolver (v2), which the Resolver design now describes, has its
+snapshot under [`resolver/v2/`](../resolver/v2/).
 Storage Server history and system-wide support for extended transactions
 remain implementation work. The descriptions above specify the intended design.
 
