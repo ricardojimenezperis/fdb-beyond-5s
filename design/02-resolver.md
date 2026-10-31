@@ -106,6 +106,14 @@ Locality changes the result. Keeping the same tree and batch size but sampling t
 
 The clustered case reaches 2,400 leaves and shares more work at every level. The counts assume live separators and reads that remain eligible throughout traversal. They exclude predecessor checks, overlap scans, eligibility checks, cleanup, task scheduling and prefetch instructions, so the comparison reduction need not translate into the same runtime speedup. Both methods search the same child boundaries and omit the redundant first-child minimum. The model also records v1-style searches that include that minimum.
 
+![Key comparisons to locate 10,000 reads in the synthetic tree, independent searches against recursive partitioning, for uniform and clustered reads.](../resolver/v2/figs/fig-v2-model-partition-totals.svg)
+
+*Synthetic comparison model, not a measurement. Key comparisons needed to locate 10,000 read begins in the declared tree: 204,408 against 90,496 for internal routing with uniform reads, 259,091 against 144,956 including the initial leaf search, and 261,795 against 23,643 when the reads are clustered. Measured performance is in the [evaluation](../resolver/v2/06-evaluation.md).*
+
+![Key comparisons by tree level in the synthetic model, for uniform and clustered reads.](../resolver/v2/figs/fig-v2-model-partition-by-depth.svg)
+
+*The same synthetic model by level. With uniform reads, partitioning saves most comparisons near the root and almost none at the leaves, where nearly every visited node holds one read; clustered reads share work at every level.*
+
 The batch contains **10,000 read intervals reaching the tree**; 10,000 transactions with four reads each would instead supply 40,000 intervals. Keys are represented by their sorted positions, without simulating byte lengths or cache behavior. The [Python model](../resolver/v2/analysis/partition-comparison-example.py) reproduces the counts; its [JSON output](../resolver/v2/analysis/partition-comparison-example.json) records the assumptions and subtotals.
 
 ### Resumable tasks

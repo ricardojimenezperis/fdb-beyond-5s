@@ -1,0 +1,126 @@
+{
+  "kind": "synthetic comparison-count model, not a benchmark",
+  "seed": 1,
+  "geometry": {
+    "pool_bytes": 6442188800,
+    "nodes_by_depth": [
+      1,
+      2,
+      56,
+      1568,
+      43904,
+      1229312
+    ],
+    "node_blocks": 1274843,
+    "node_bytes": 2610878464,
+    "leaves": 1229312,
+    "history_intervals": 50401792,
+    "remaining_key_blocks": 1870757,
+    "remaining_key_bytes": 3831310336,
+    "key_payload_bytes_per_interval_if_filled": 75.12455446028585
+  },
+  "uniform": {
+    "reads": 10000,
+    "independent_boundary_comparisons_by_depth": [
+      10000,
+      48624,
+      48646,
+      48543,
+      48595,
+      54683
+    ],
+    "v1_style_including_minimum_comparisons_by_depth": [
+      14966,
+      48982,
+      49013,
+      48907,
+      48947,
+      54683
+    ],
+    "grouped_comparisons_by_depth": [
+      13,
+      508,
+      6994,
+      35013,
+      47968,
+      54460
+    ],
+    "visited_nodes_by_depth": [
+      1,
+      2,
+      56,
+      1567,
+      8939,
+      9959
+    ],
+    "independent_internal_comparisons": 204408,
+    "grouped_internal_comparisons": 90496,
+    "independent_total_locating_comparisons": 259091,
+    "grouped_total_locating_comparisons": 144956,
+    "locating_comparison_reduction_percent": 44.05208980628428,
+    "locating_comparison_ratio": 1.787376859184856,
+    "excluded": [
+      "predecessor checks",
+      "overlap scans",
+      "eligibility checks",
+      "cleanup",
+      "separator repair",
+      "scheduler",
+      "key-byte costs",
+      "prefetch",
+      "input extraction and sorting"
+    ]
+  },
+  "clustered_in_100000_history_entries": {
+    "reads": 10000,
+    "independent_boundary_comparisons_by_depth": [
+      10000,
+      50000,
+      50000,
+      48611,
+      48525,
+      54659
+    ],
+    "v1_style_including_minimum_comparisons_by_depth": [
+      10000,
+      50000,
+      50000,
+      48991,
+      48890,
+      54659
+    ],
+    "grouped_comparisons_by_depth": [
+      14,
+      65,
+      77,
+      759,
+      9420,
+      13308
+    ],
+    "visited_nodes_by_depth": [
+      1,
+      1,
+      1,
+      4,
+      88,
+      2400
+    ],
+    "independent_internal_comparisons": 207136,
+    "grouped_internal_comparisons": 10335,
+    "independent_total_locating_comparisons": 261795,
+    "grouped_total_locating_comparisons": 23643,
+    "locating_comparison_reduction_percent": 90.96888787028018,
+    "locating_comparison_ratio": 11.072833396777058,
+    "excluded": [
+      "predecessor checks",
+      "overlap scans",
+      "eligibility checks",
+      "cleanup",
+      "separator repair",
+      "scheduler",
+      "key-byte costs",
+      "prefetch",
+      "input extraction and sorting"
+    ]
+  }
+}
