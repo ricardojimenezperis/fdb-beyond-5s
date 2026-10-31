@@ -2,7 +2,8 @@
 
 **Measured resolver revision:** development `dc2802fc2f6d76035e9d97bc621263e8b4f59cec`.  
 **Measured FDB integration:** `22a8ae9fba943b73cf149d21b05dfe6b07c6e013`, with the integrated benchmark at `3ba52abba955998757fa939b731fc3d2b8fa25b1`.  
-**Evaluation campaigns:** 29–30 October 2026, on Intel, AMD and Apple M3 processors.
+**Evaluation campaigns:** 29–30 October 2026, on Intel, AMD and Apple M3 processors.  
+**Code:** branch [`resolver-v2`](https://github.com/ricardojimenezperis/foundationdb/tree/resolver-v2) of the FoundationDB fork, at `491d3f5a6fd02bea43b7b02502e35469afc2a53a`.
 
 ## Start here
 
@@ -24,6 +25,6 @@ V2 checks reads faster than the sequential tree in the custom benchmarks, in ski
 
 ## Version identity and scope
 
-The measurements identify their sources by the development and integration commits above and by the binary hashes in the evaluation packages. The public source series adds one change after those measurements, the reservation of room for a write's longest keys; the [evidence register](07-evidence-and-validation.md#write-reservation-after-the-measurements) explains it and why it does not turn the results into measurements of the corrected code.
+The measurements identify their sources by the development and integration commits above and by the binary hashes in the evaluation packages. The public branch adds one change after those measurements, the reservation of room for a write's longest keys; the [evidence register](07-evidence-and-validation.md#write-reservation-after-the-measurements) explains it and why it does not turn the results into measurements of the corrected code.
 
 The [resolver v1 snapshot](../v1/README.md) is the sequential baseline this milestone builds on. The [Resolver design](../../design/02-resolver.md) under `design/` follows the current implementation.
