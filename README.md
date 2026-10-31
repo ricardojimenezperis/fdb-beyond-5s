@@ -14,6 +14,6 @@ Extending FoundationDB beyond its five-second transaction window: budgeted confl
 ## Milestones
 
 - [Resolver v1](resolver/v1/README.md) — sequential temporal B+ tree, evaluated under a 6 GiB history budget (23 October 2026)
-- [Resolver v2](resolver/v2/03-resolver-v2-design.md) — grouped read checks with shared navigation and software prefetching; the design as implemented is published, the remaining documents follow
+- [Resolver v2](resolver/v2/README.md) — grouped read checks with shared navigation and software prefetching, evaluated on Intel, AMD and Apple M3 processors (29–30 October 2026)
 
 Each milestone is an immutable snapshot: design as implemented, decision record, journal, evaluation and evidence register.
