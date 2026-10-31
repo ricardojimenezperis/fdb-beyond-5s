@@ -49,3 +49,11 @@ The standalone reference also needed correction. Its original baseline came from
 On the long trace, v2 retained the same final minimum history as v1: 582.938 seconds under the same counted-history budget. Retention was still declining at the end of the measured segment. Writes accounted for 72.5% of v2's native time in the first round, while read checking accounted for 23.0%.
 
 The [evaluation](06-evaluation.md) keeps the workloads and machine sessions separate and links the records behind the tables and figures. The [design history](04-decisions-and-evolution.md) follows the implementation choices in more detail.
+
+## 30–31 October 2026 — Long keys and reclaimed key blocks
+
+Reviewing the reclamation reserve found a real failure. A write reclaimed history until 35 blocks were free, enough for its range, two exteriors and two nodes with keys of up to 11,132 bytes at 2 KiB. FDB's client admits write-conflict keys of up to 30,001 bytes for system keys, which can need 92 blocks; with the pool full, a failed store was dereferenced. The reserve now follows the longest key stored or being written, and a write the whole pool cannot hold throws instead. A new test crashed before the change. The change came after every measurement in the [evaluation](06-evaluation.md), which therefore still describes `dc2802fc2f`.
+
+The reserve does not shrink once a long key has been reclaimed. A test measures that cost rather than changing the policy: in a 384-block pool, one write of 30,001-byte keys reduces the history retained over the next 20,000 short writes from 9,096 to 7,588 commit versions.
+
+The separator repair also gained a regression test in the component suite. It reclaims the key block that expired separators point into, confirms that the pool reuses it, and fails if either half of the repair is reverted. With further tests of expired trees, empty keys, long keys and multi-interval writes, the suite has 228 tests. The public series now has eleven commits, the write reservation being one of them; the [validation report](07-evidence-and-validation.md) gives the details.
