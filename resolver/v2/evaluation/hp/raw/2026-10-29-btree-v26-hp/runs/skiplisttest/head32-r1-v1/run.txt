@@ -1,0 +1,2 @@
+cand=v1 conf=head32 layout=head bytes=32 P=262144 PER_BATCH=40000 segments=none bin=/data/fdb/scratch/btprof/bench-btree-v1/build-v1/bin/fdbserver sha256=6fd487fd673580d06448dd57d8489e49096ef32ffc4764bac710f5ca786454f9 cpu=6 kernel=7.0.0-38-generic load=1.02 1.19 7.58 start=2026-10-29T20:00:43+01:00 knobs=[--knob_paged_resolver_pool_pages=262144]
+end=2026-10-29T20:01:25+01:00 exit=0

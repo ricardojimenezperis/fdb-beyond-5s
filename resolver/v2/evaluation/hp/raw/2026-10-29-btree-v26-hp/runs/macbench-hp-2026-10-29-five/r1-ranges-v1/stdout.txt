@@ -1,0 +1,26 @@
+setting workload = ranges
+startingConfiguration: start
+useDB: false
+Run test:UnitTests start
+setting workload = ranges
+setting up test (UnitTests)...
+Test received trigger for setup...
+running test (UnitTests)...
+Found 1 tests
+Testing noSim/fdbserver/conflictset/macBenchmark
+MacBenchmark index=btree-v1 workload=ranges batches=3000 reads=12000000 writes=2967779 readS=6.021 writeS=1.674 combineS=0.035 readsPerS=1992882 writesPerS=1773169 conflicts=3479753 decisions=df42a6e5c89796ea
+UnitTests complete
+UnitTests complete
+checking test (UnitTests)...
+fetching metrics (UnitTests)...
+Metric (0, 0): UnitTests.Test Cases Available, 1.000000, 1
+Metric (0, 1): UnitTests.Test Cases Executed, 1.000000, 1
+Metric (0, 2): UnitTests.Test Cases Failed, 0.000000, 0
+Metric (0, 3): UnitTests.Total wall clock time (s), 10.683486, 10.7
+Metric (0, 4): UnitTests.Total flow time (s), 0.000000, 0
+Test complete
+1 test clients passed; 0 test clients failed
+Run test:UnitTests Done.
+
+1 tests passed; 0 tests failed.
+

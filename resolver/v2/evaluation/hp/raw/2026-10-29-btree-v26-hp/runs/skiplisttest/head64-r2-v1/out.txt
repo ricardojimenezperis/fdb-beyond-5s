@@ -1,0 +1,31 @@
+Skip list test
+miniConflictSetTest complete
+skiplisttest cpu requested=6 running=6
+skiplisttest keyBytes=64 layout=head
+Test data generated: 500 batches, 40000/batch, span 10
+Running
+New conflict set: 39.766 sec
+                  0.251 Mtransactions/sec
+                  1.006 Mkeys/sec
+Detect only:      37.285 sec
+                  0.268 Mtransactions/sec
+                  1.073 Mkeys/sec
+Skiplist only:    32.889 sec
+                  0.304 Mtransactions/sec
+                  1.216 Mkeys/sec
+Performance counters:
+               Build: 1.47
+                 Add: 0.83
+              Detect: 37.3
+              D.Sort: 4.11
+           D.Combine: 0.14
+         D.CheckRead: 21
+   D.CheckIntraBatch: 0.118
+        D.MergeWrite: 11.9
+      D.RemoveBefore: 8.08e-05
+0 entries in version history
+7179409 transactions without conflict
+index=btree-v1 decisionsHash=b25319a6c4f592a3
+phases: checkReadS=20.9684 intraBatchS=0.1177 combineS=0.1401 mergeS=11.9208 cleanupS=0.0001
+residentMiB=19486.1 validationMinRV=0 boundaryPastWindow=0
+paged set: 0 of 0 pool pages used (0 heap, 0 index), 0 history pages reclaimed, 0 reads too old within the window

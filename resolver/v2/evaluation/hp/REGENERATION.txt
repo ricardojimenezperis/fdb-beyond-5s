@@ -1,0 +1,14 @@
+Clean regeneration check, 2026-10-30T22:31:00+01:00, HP
+sandbox: bwrap, root read-only, /data and /home replaced by empty tmpfs; only make_figures.py, ASSETS.sha256 and data/ copied in; Python 3.12.3, matplotlib 3.10.8
+command: python3 make_figures.py --from-csv
+entries visible in /data: 0
+ls: cannot access '/data/fdb': No such file or directory
+ASSETS.sha256
+data
+make_figures.py
+longrun-per-batch.csv.gz: OK
+longrun-resolver-v2-time-per-batch.csv.gz: OK
+exit=0
+20
+result: 20 files (10 SVG + 10 PNG) written; all 20 byte-identical to figures/ in this directory
+missing-asset check (longrun-per-batch.csv.gz removed): script exits with the message naming the asset

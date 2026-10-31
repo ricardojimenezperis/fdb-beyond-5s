@@ -1,0 +1,2 @@
+cand=v26 conf=tail64 layout=tail bytes=64 P=262144 PER_BATCH=40000 segments=none bin=/data/fdb/scratch/btprof/bench-v26-macbench/build-v26/bin/fdbserver sha256=022270403ad2d635b7f937c5b22dccb5478391edeb7a17382e74bc55e40232f8 cpu=6 kernel=7.0.0-38-generic load=1.07 1.03 1.41 start=2026-10-29T20:43:30+01:00 knobs=[--knob_paged_resolver_pool_pages=262144]
+end=2026-10-29T20:44:14+01:00 exit=0

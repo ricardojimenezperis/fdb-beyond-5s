@@ -1,0 +1,2 @@
+cand=fdb conf=head128 layout=head bytes=128 P=262144 PER_BATCH=40000 segments=none bin=/data/fdb/scratch/btprof/bench-btree-v1/build-v107/bin/fdbserver sha256=a21538f3b269cb5d158a3fd9657c72e0c9b460b996631b4425269048990797de cpu=6 kernel=7.0.0-38-generic load=1.24 1.13 1.34 start=2026-10-29T20:48:46+01:00 knobs=[]
+end=2026-10-29T20:49:13+01:00 exit=0

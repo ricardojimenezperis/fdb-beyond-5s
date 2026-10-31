@@ -1,0 +1,4 @@
+image foundationdb/build:rockylinux9-latest sha256:591bb3f7b9a8c83ca8ddac97f0d05239532d0dd03eef411094e9fc23766879f7
+binary v107 source 2656860f23132d530ce5c1ac003ee82e71299731 clean=0 fdbserver_sha256 a21538f3b269cb5d158a3fd9657c72e0c9b460b996631b4425269048990797de compiler Clang 19.1.5
+binary v1 source 5a07ab1936aaa6c01b5f36191c5446dee0a3d674 clean=0 fdbserver_sha256 6fd487fd673580d06448dd57d8489e49096ef32ffc4764bac710f5ca786454f9 compiler Clang 19.1.5
+cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=/usr/local/bin/clang -DCMAKE_CXX_COMPILER=/usr/local/bin/clang++ -DUSE_LIBCXX=1 -DUSE_LD=LLD <src>; ninja fdbserver

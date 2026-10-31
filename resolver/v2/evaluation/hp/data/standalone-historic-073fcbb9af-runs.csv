@@ -1,0 +1,13 @@
+round,candidate,workload,block_bytes,batches,reads,writes,read_s,write_s,total_s,reads_per_s,writes_per_s,conflicts,decisions_hash,source
+1,standalone baseline (073fcbb9af),points,2048,3000,12000000,2999856,11.656,2.867,14.523,1029519,1046310,29209,4787dbf4af9b9ca8,2026-10-29-btree-v26-hp/mac-standalone/out/runs.txt:1
+1,"resolver v2 (dc2802fc2f), 2026-10-29",points,2048,3000,12000000,2999856,5.227,2.997,8.224,2295720,1000878,29209,4787dbf4af9b9ca8,2026-10-29-btree-v26-hp/mac-standalone/out/runs.txt:3
+1,standalone baseline (073fcbb9af),ranges,2048,3000,12000000,2967779,5.299,1.486,6.785,2264558,1997575,3479753,df42a6e5c89796ea,2026-10-29-btree-v26-hp/mac-standalone/out/runs.txt:4
+1,"resolver v2 (dc2802fc2f), 2026-10-29",ranges,2048,3000,12000000,2967779,3.360,1.518,4.878,3570975,1955172,3479753,df42a6e5c89796ea,2026-10-29-btree-v26-hp/mac-standalone/out/runs.txt:6
+2,standalone baseline (073fcbb9af),points,2048,3000,12000000,2999856,11.654,2.864,14.518,1029649,1047469,29209,4787dbf4af9b9ca8,2026-10-29-btree-v26-hp/mac-standalone/out/runs.txt:7
+2,"resolver v2 (dc2802fc2f), 2026-10-29",points,2048,3000,12000000,2999856,5.231,2.995,8.225,2294112,1001764,29209,4787dbf4af9b9ca8,2026-10-29-btree-v26-hp/mac-standalone/out/runs.txt:9
+2,standalone baseline (073fcbb9af),ranges,2048,3000,12000000,2967779,5.293,1.487,6.780,2267031,1996301,3479753,df42a6e5c89796ea,2026-10-29-btree-v26-hp/mac-standalone/out/runs.txt:10
+2,"resolver v2 (dc2802fc2f), 2026-10-29",ranges,2048,3000,12000000,2967779,3.363,1.518,4.881,3568179,1955177,3479753,df42a6e5c89796ea,2026-10-29-btree-v26-hp/mac-standalone/out/runs.txt:12
+3,standalone baseline (073fcbb9af),points,2048,3000,12000000,2999856,11.664,2.869,14.533,1028803,1045472,29209,4787dbf4af9b9ca8,2026-10-29-btree-v26-hp/mac-standalone/out/runs.txt:13
+3,"resolver v2 (dc2802fc2f), 2026-10-29",points,2048,3000,12000000,2999856,5.242,2.998,8.240,2289074,1000572,29209,4787dbf4af9b9ca8,2026-10-29-btree-v26-hp/mac-standalone/out/runs.txt:15
+3,standalone baseline (073fcbb9af),ranges,2048,3000,12000000,2967779,5.293,1.482,6.776,2266974,2001941,3479753,df42a6e5c89796ea,2026-10-29-btree-v26-hp/mac-standalone/out/runs.txt:16
+3,"resolver v2 (dc2802fc2f), 2026-10-29",ranges,2048,3000,12000000,2967779,3.360,1.520,4.880,3571447,1951981,3479753,df42a6e5c89796ea,2026-10-29-btree-v26-hp/mac-standalone/out/runs.txt:18
