@@ -1,0 +1,84 @@
+3973493 --- SIGPROF {si_signo=SIGPROF, si_code=SI_TKILL, si_pid=1, si_uid=0} ---
+3973493 --- SIGPROF {si_signo=SIGPROF, si_code=SI_TKILL, si_pid=1, si_uid=0} ---
+3973493 openat(AT_FDCWD, "/proc/self/statm", O_RDONLY) = 8
+3973493 --- SIGPROF {si_signo=SIGPROF, si_code=SI_TKILL, si_pid=1, si_uid=0} ---
+3973493 openat(AT_FDCWD, "/proc/self/statm", O_RDONLY) = 8
+3973493 write(1, "ConflictSetBenchmark index=btree"..., 441) = 441
+3973493 openat(AT_FDCWD, "unittests", O_RDONLY|O_NONBLOCK|O_CLOEXEC|O_DIRECTORY) = 8
+3973493 unlink("unittests")             = -1 EISDIR (Is a directory)
+3973493 write(1, "UnitTests complete\n", 19) = 19
+3973493 write(1, "UnitTests complete\n", 19) = 19
+3973493 write(1, "checking test (UnitTests)...\n", 29) = 29
+3973493 write(1, "fetching metrics (UnitTests)...\n", 32) = 32
+3973493 write(1, "Metric (0, 0): UnitTests.Test Ca"..., 59) = 59
+3973493 write(1, "Metric (0, 1): UnitTests.Test Ca"..., 58) = 58
+3973493 write(1, "Metric (0, 2): UnitTests.Test Ca"..., 56) = 56
+3973493 write(1, "Metric (0, 3): UnitTests.Total w"..., 68) = 68
+3973493 write(1, "Metric (0, 4): UnitTests.Total f"..., 58) = 58
+3973493 write(1, "Test complete\n", 14) = 14
+3973493 write(1, "1 test clients passed; 0 test cl"..., 45) = 45
+3973493 write(1, "Run test:UnitTests Done.\n", 25) = 25
+3973493 write(1, "\n", 1)               = 1
+3973493 write(1, "1 tests passed; 0 tests failed.\n", 32) = 32
+3973493 write(1, "\n", 1)               = 1
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 260) = 260
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 247) = 247
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 241) = 241
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 211) = 211
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 244) = 244
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 263) = 263
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 382) = 382
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 227) = 227
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 250) = 250
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 233) = 233
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 232) = 232
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 231) = 231
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 236) = 236
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 267) = 267
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 231) = 231
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 226) = 226
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 251) = 251
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 352) = 352
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 251) = 251
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 422) = 422
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 253) = 253
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 233) = 233
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 231) = 231
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 267) = 267
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 238) = 238
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 276) = 276
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 226) = 226
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 253) = 253
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 255) = 255
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 231) = 231
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 236) = 236
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 282) = 282
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 238) = 238
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 278) = 278
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 222) = 222
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 271) = 271
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 207) = 207
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 237) = 237
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 242) = 242
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 250) = 250
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 249) = 249
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 247) = 247
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 249) = 249
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 266) = 266
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 225) = 225
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 252) = 252
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 265) = 265
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 248) = 248
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 254) = 254
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 246) = 246
+3973518 write(7, "<Event Severity=\"30\" Time=\"17934"..., 271) = 271
+3973518 write(7, "<Event Severity=\"20\" Time=\"17934"..., 572) = 572
+3973518 write(7, "<Event Severity=\"20\" Time=\"17934"..., 572) = 572
+3973518 write(7, "<Event Severity=\"20\" Time=\"17934"..., 552) = 552
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 1686) = 1686
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 235) = 235
+3973518 write(7, "<Event Severity=\"10\" Time=\"17934"..., 256) = 256
+3973518 write(7, "</Trace>\r\n", 10)    = 10
+3973518 +++ exited with 0 +++
+3973519 +++ exited with 0 +++
+3973493 +++ exited with 0 +++

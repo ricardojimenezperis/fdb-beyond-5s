@@ -1,0 +1,4 @@
+name=head128-r2-v2 start=2026-10-31T01:41:55+01:00 end=2026-10-31T01:42:34+01:00 exit=0 cpu=7 sibling=15 topology=[7,7,0,0 15,7,0,0 ] docker_before=0 load_before=[1.06 1.04 1.05] dirty_kib_before=176
+cpu_busy=0.99019 sibling_busy=0.00000 hugepages=0 kernel=6.8.0-138-generic
+docker_env=[-e SKIPLISTTEST_CPU=7 -e SKIPLISTTEST_KEY_BYTES=128 -e SKIPLISTTEST_KEY_LAYOUT=head -e SKIPLISTTEST_PER_BATCH=40000 -e SKIPLISTTEST_RANGE_SPAN=10]
+command=[$BUILDS/v2/bin/fdbserver -r skiplisttest -C $ROOT/scratch/eval-v2-amd/scripts/fdb.cluster -s 1 --knob_paged_resolver_pool_pages=262144]

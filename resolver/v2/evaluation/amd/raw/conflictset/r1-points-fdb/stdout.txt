@@ -1,0 +1,34 @@
+setting workload = points
+setting seed = 1
+setting batches = 2000
+setting warmupBatches = 1000
+setting transactionsPerBatch = 500
+startingConfiguration: start
+useDB: false
+Run test:UnitTests start
+setting batches = 2000
+setting seed = 1
+setting transactionsPerBatch = 500
+setting warmupBatches = 1000
+setting workload = points
+setting up test (UnitTests)...
+Test received trigger for setup...
+running test (UnitTests)...
+Found 1 tests
+Testing noSim/fdbserver/conflictset/benchmark
+ConflictSetBenchmark index=skiplist workload=points seed=1 batches=2000 warmup=1000 transactions=1000000 committed=962526 tooOld=0 decisions=41ccf929e519502f seconds=4.1898 txPerSec=238676 batchP50us=2094.3 batchP90us=2141.5 batchP99us=2201.1 batchMaxUs=2383.9 checkReadS=2.0864 intraBatchS=0.0138 combineS=0.0188 mergeS=1.2835 cleanupS=0.4084 rssBeforeMiB=52.7 rssAfterWarmupMiB=165.0 rssAfterMiB=184.7 validationMinRV=0 tooOldWithinWindow=0
+UnitTests complete
+UnitTests complete
+checking test (UnitTests)...
+fetching metrics (UnitTests)...
+Metric (0, 0): UnitTests.Test Cases Available, 1.000000, 1
+Metric (0, 1): UnitTests.Test Cases Executed, 1.000000, 1
+Metric (0, 2): UnitTests.Test Cases Failed, 0.000000, 0
+Metric (0, 3): UnitTests.Total wall clock time (s), 6.334409, 6.33
+Metric (0, 4): UnitTests.Total flow time (s), 0.000000, 0
+Test complete
+1 test clients passed; 0 test clients failed
+Run test:UnitTests Done.
+
+1 tests passed; 0 tests failed.
+

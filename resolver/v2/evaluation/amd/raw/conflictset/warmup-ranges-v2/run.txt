@@ -1,0 +1,4 @@
+name=warmup-ranges-v2 start=2026-10-31T00:17:27+01:00 end=2026-10-31T00:17:31+01:00 exit=0 cpu=7 sibling=15 topology=[7,7,0,0 15,7,0,0 ] docker_before=0 load_before=[1.12 5.67 10.21] dirty_kib_before=68
+cpu_busy=0.91059 sibling_busy=0.00471 hugepages=0 kernel=6.8.0-138-generic
+docker_env=[]
+command=[$BUILDS/v2/bin/fdbserver -r unittests -f noSim/fdbserver/conflictset/benchmark --test_workload=ranges --test_seed=1 --test_batches=2000 --test_warmupBatches=1000 --test_transactionsPerBatch=500 --knob_paged_resolver_pool_pages=16384 -L /out]

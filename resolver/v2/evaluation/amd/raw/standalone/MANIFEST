@@ -1,0 +1,8 @@
+test=standalone start=2026-10-31T00:23:23+01:00 compile=[clang++ -std=c++20 -O3 -DNDEBUG -stdlib=libc++ -Iresolver1 resolver1/pagepool.cpp resolver1/keystore.cpp resolver1/bnodestore.cpp resolver1/tempconflictbtree.cpp resolver1/bench/blocksizebench.cpp -o blocksizebench]
+bin v1 605c8bea90467ef392782319db5a46873169fd6a09ab9cc29affd2143b66a435 source a8921c3babbaea00099cc8c4c8608e942e921120 bench 1b70ae9d2e3725895eefc5a8c203030c5056f9bbf59dc517a8f157c35bb6e232
+bin v2 27f1e87d311e21386f11fabe5c92077eb7f2aa989eb7ebb67b3c5fc23d42b504 source 22d9bb7a670037fe40070a0164fd6885dc981276 bench 8967ce1ad7e49c4187c6ae34d04486ac4749f8649d51ceb250bed2d40f29ea8b
+053c55c644601141ffb398dc17e025498e34b1fdb2dc0626a770309a2f97e99b  integrated.sh
+d1e9e84a331c321e0c3969d2efba4ac7a37ec13133bedca33ee33477edc316b3  runone.sh
+69ac37ffb64814eff02c59c982251f30c1ee1f98d5288c01b72b2d5333b86760  skiplist.sh
+dba04cb71506fc77bae26d528fd648afdf3d5c08c4a683eae1c381e58829680c  standalone.sh
+end 2026-10-31T00:26:22+01:00

@@ -1,0 +1,370 @@
+diff --git a/fdbserver/resolver/ConflictSet.cpp b/fdbserver/resolver/ConflictSet.cpp
+index ff744588d..283d16d9d 100644
+--- a/fdbserver/resolver/ConflictSet.cpp
++++ b/fdbserver/resolver/ConflictSet.cpp
+@@ -1274,8 +1274,6 @@ void skipListTest() {
+ 
+ 	double start;
+ 
+-	ConflictSet* cs = newConflictSet();
+-
+ 	Arena testDataArena;
+ 	VectorRef<VectorRef<KeyRangeRef>> testData;
+ 	const int batches = 500; // deterministicRandom()->randomInt(500, 5000);
+@@ -1301,6 +1299,8 @@ void skipListTest() {
+ 	}
+ 	printf("Test data generated: %d batches, %d/batch, span %d\n", batches, data_per_batch, rangeSpan);
+ 
++	ConflictSet* cs = newConflictSet();
++
+ 	printf("Running\n");
+ 
+ 	int readCount = 1, writeCount = 1;
+@@ -1943,3 +1943,5 @@ TEST_CASE("/fdbserver/conflictset/reportedConflictingRanges") {
+ 
+ #include "By5ResolverTest.inc"
+ #include "SmokeReplay.inc"
++#include "EvalBench.inc"
++#include "MacBenchmark.inc"
+diff --git a/fdbserver/resolver/EvalBench.inc b/fdbserver/resolver/EvalBench.inc
+new file mode 100644
+index 000000000..dc3534dd1
+--- /dev/null
++++ b/fdbserver/resolver/EvalBench.inc
+@@ -0,0 +1,179 @@
++#include "fdbserver/core/Knobs.h"
++
++namespace {
++
++StringRef evalBenchmarkKey(Arena& arena, int64_t n) {
++	uint8_t* bytes = new (arena) uint8_t[10];
++	bytes[0] = 'c';
++	bytes[1] = '/';
++	for (int i = 0; i < 8; ++i) {
++		bytes[2 + i] = uint8_t(uint64_t(n) >> (56 - 8 * i));
++	}
++	return StringRef(bytes, 10);
++}
++
++force_inline void evalResolveBatch(ConflictSet* cs,
++                                   const std::vector<CommitTransactionRef>& trs,
++                                   Version now,
++                                   Version newOldestVersion,
++                                   std::vector<int>& nonConflicting,
++                                   std::vector<int>& tooOldList,
++                                   std::map<int, VectorRef<int>>& conflictingKeys,
++                                   Arena& replyArena) {
++	ConflictBatch batch(cs, &conflictingKeys, &replyArena);
++	for (const CommitTransactionRef& tr : trs) {
++		batch.addTransaction(tr, newOldestVersion);
++	}
++	batch.detectConflicts(now, newOldestVersion, nonConflicting, &tooOldList);
++}
++
++__attribute__((noinline)) void evalWarmupBatch(ConflictSet* cs,
++                                               const std::vector<CommitTransactionRef>& trs,
++                                               Version now,
++                                               Version newOldestVersion,
++                                               std::vector<int>& nonConflicting,
++                                               std::vector<int>& tooOldList,
++                                               std::map<int, VectorRef<int>>& conflictingKeys,
++                                               Arena& replyArena) {
++	evalResolveBatch(cs, trs, now, newOldestVersion, nonConflicting, tooOldList, conflictingKeys, replyArena);
++}
++
++__attribute__((noinline)) void evalMeasuredBatch(ConflictSet* cs,
++                                                 const std::vector<CommitTransactionRef>& trs,
++                                                 Version now,
++                                                 Version newOldestVersion,
++                                                 std::vector<int>& nonConflicting,
++                                                 std::vector<int>& tooOldList,
++                                                 std::map<int, VectorRef<int>>& conflictingKeys,
++                                                 Arena& replyArena) {
++	evalResolveBatch(cs, trs, now, newOldestVersion, nonConflicting, tooOldList, conflictingKeys, replyArena);
++}
++
++double evalPercentile(std::vector<double> samples, double p) {
++	if (samples.empty()) {
++		return 0;
++	}
++	std::sort(samples.begin(), samples.end());
++	return samples[std::min(samples.size() - 1, size_t(p * double(samples.size())))];
++}
++
++} // namespace
++
++TEST_CASE("noSim/fdbserver/conflictset/benchmark") {
++	const std::string workload = params.get("workload").orDefault("points");
++	const int warmupBatches = params.getInt("warmupBatches").orDefault(1000);
++	const int batches = params.getInt("batches").orDefault(2000);
++	const int transactionsPerBatch = params.getInt("transactionsPerBatch").orDefault(500);
++	const int readsPerTransaction = params.getInt("readsPerTransaction").orDefault(4);
++	const int writesPerTransaction = params.getInt("writesPerTransaction").orDefault(2);
++	const int64_t keySpace = params.getInt("keySpace").orDefault(10000000);
++	const int64_t versionsPerBatch = params.getInt("versionsPerBatch").orDefault(10000);
++	const int64_t maxReadLag = params.getInt("maxReadLagVersions").orDefault(2000000);
++	const int64_t maxReadKeys = params.getInt("maxReadKeys").orDefault(1000);
++	const int64_t maxWriteKeys = params.getInt("maxWriteKeys").orDefault(10);
++	const int64_t seed = params.getInt("seed").orDefault(1);
++	const bool ranges = workload == "ranges";
++	ASSERT(ranges || workload == "points");
++
++	const Version window = SERVER_KNOBS->MAX_WRITE_TRANSACTION_LIFE_VERSIONS;
++	const uint64_t residentBefore = getResidentMemoryUsage();
++	ConflictSet* cs = newConflictSet();
++	std::mt19937_64 random(seed);
++	auto uniform = [&](int64_t lo, int64_t hi) { return lo + int64_t(random() % uint64_t(hi - lo + 1)); };
++
++	Version now = window + versionsPerBatch;
++	std::vector<double> latencies;
++	int64_t transactions = 0, committed = 0, tooOld = 0;
++	uint64_t decisionsHash = 1469598103934665603ULL;
++	ConflictSetStats atStart;
++	uint64_t residentAfterWarmup = 0;
++	double measuredSeconds = 0;
++
++	for (int b = 0; b < warmupBatches + batches; ++b) {
++		if (b == warmupBatches) {
++			atStart = getConflictSetStats(cs);
++			residentAfterWarmup = getResidentMemoryUsage();
++		}
++		Arena arena;
++		std::vector<CommitTransactionRef> trs(transactionsPerBatch);
++		for (CommitTransactionRef& tr : trs) {
++			tr.read_snapshot = now - uniform(1, maxReadLag);
++			for (int r = 0; r < readsPerTransaction; ++r) {
++				const int64_t k = uniform(0, keySpace - 1);
++				const StringRef from = evalBenchmarkKey(arena, k);
++				const StringRef to = ranges ? evalBenchmarkKey(arena, k + uniform(1, maxReadKeys)) : keyAfter(from, arena);
++				tr.read_conflict_ranges.push_back(arena, KeyRangeRef(from, to));
++			}
++			for (int w = 0; w < writesPerTransaction; ++w) {
++				const int64_t k = uniform(0, keySpace - 1);
++				const StringRef from = evalBenchmarkKey(arena, k);
++				const StringRef to = ranges ? evalBenchmarkKey(arena, k + uniform(1, maxWriteKeys)) : keyAfter(from, arena);
++				tr.write_conflict_ranges.push_back(arena, KeyRangeRef(from, to));
++			}
++		}
++
++		std::vector<int> nonConflicting, tooOldList;
++		std::map<int, VectorRef<int>> conflictingKeys;
++		Arena replyArena;
++		const bool measured = b >= warmupBatches;
++		const double start = timer_monotonic();
++		if (measured) {
++			evalMeasuredBatch(cs, trs, now, now - window, nonConflicting, tooOldList, conflictingKeys, replyArena);
++		} else {
++			evalWarmupBatch(cs, trs, now, now - window, nonConflicting, tooOldList, conflictingKeys, replyArena);
++		}
++		const double elapsed = timer_monotonic() - start;
++		if (measured) {
++			latencies.push_back(elapsed);
++			measuredSeconds += elapsed;
++			transactions += trs.size();
++			committed += nonConflicting.size();
++			tooOld += tooOldList.size();
++			std::vector<uint8_t> status(trs.size(), 1);
++			for (int t : nonConflicting) {
++				status[t] = 0;
++			}
++			for (int t : tooOldList) {
++				status[t] = 2;
++			}
++			for (uint8_t s : status) {
++				decisionsHash = (decisionsHash ^ s) * 1099511628211ULL;
++			}
++		}
++		now += versionsPerBatch;
++	}
++
++	const ConflictSetStats atEnd = getConflictSetStats(cs);
++	const uint64_t residentAfter = getResidentMemoryUsage();
++	printf("ConflictSetBenchmark index=%s workload=%s seed=%lld batches=%d warmup=%d transactions=%lld "
++	       "committed=%lld tooOld=%lld decisions=%016llx seconds=%.4f txPerSec=%.0f batchP50us=%.1f batchP90us=%.1f "
++	       "batchP99us=%.1f batchMaxUs=%.1f checkReadS=%.4f intraBatchS=%.4f combineS=%.4f mergeS=%.4f cleanupS=%.4f "
++	       "rssBeforeMiB=%.1f rssAfterWarmupMiB=%.1f rssAfterMiB=%.1f validationMinRV=%lld tooOldWithinWindow=%lld\n",
++	       conflictSetIndexName(cs),
++	       workload.c_str(),
++	       (long long)seed,
++	       batches,
++	       warmupBatches,
++	       (long long)transactions,
++	       (long long)committed,
++	       (long long)tooOld,
++	       (unsigned long long)decisionsHash,
++	       measuredSeconds,
++	       double(transactions) / measuredSeconds,
++	       evalPercentile(latencies, 0.5) * 1e6,
++	       evalPercentile(latencies, 0.9) * 1e6,
++	       evalPercentile(latencies, 0.99) * 1e6,
++	       evalPercentile(latencies, 1.0) * 1e6,
++	       atEnd.checkReadSeconds - atStart.checkReadSeconds,
++	       atEnd.checkIntraBatchSeconds - atStart.checkIntraBatchSeconds,
++	       atEnd.combineSeconds - atStart.combineSeconds,
++	       atEnd.mergeSeconds - atStart.mergeSeconds,
++	       atEnd.cleanupSeconds - atStart.cleanupSeconds,
++	       residentBefore / 1048576.0,
++	       residentAfterWarmup / 1048576.0,
++	       residentAfter / 1048576.0,
++	       (long long)atEnd.validationMinRV,
++	       (long long)atEnd.tooOldWithinWindow);
++	destroyConflictSet(cs);
++	return Void();
++}
+diff --git a/fdbserver/resolver/MacBenchmark.inc b/fdbserver/resolver/MacBenchmark.inc
+new file mode 100644
+index 000000000..a13b39ca3
+--- /dev/null
++++ b/fdbserver/resolver/MacBenchmark.inc
+@@ -0,0 +1,151 @@
++/*
++ * MacBenchmark.inc
++ *
++ * resolver1's own benchmark, bench/blocksizebench.cpp (the "Mac benchmark"), through the Resolver's
++ * batch path, so that every history a binary can select runs it: FDB's skip list and v107 by their
++ * knobs, btree-v1 and btree-v2.5 in their own binaries. Included at the end of ConflictSet.cpp.
++ *
++ * The batches are the benchmark's, drawn from the same generator and seed before anything is timed:
++ * 12-byte keys over 10^7 values; per batch 1000 sorted, disjoint writes and 4000 reads, of one key
++ * (points) or of 1 to 20 keys, one in ten of 1 to 2000 (ranges), at read versions up to 500 below
++ * the batch's. Each read is a transaction of its own, so its decision is the read's; the writes are
++ * one last transaction without reads, which commits and, being last, conflicts with no read of its
++ * batch. No version leaves the window, so nothing is too old and the skip list removes nothing.
++ *
++ * Reads are timed as the batch path's read check (D.CheckRead) and writes as its merge (D.MergeWrite),
++ * the phases blocksizebench times on the tree. Decisions are hashed as blocksizebench hashes them:
++ * points 4787dbf4af9b9ca8 and ranges df42a6e5c89796ea with 3000 batches.
++ */
++
++namespace {
++
++struct MacBenchmarkRandom {
++	uint64_t state;
++	explicit MacBenchmarkRandom(uint64_t seed) : state(seed * 0x9E3779B97F4A7C15ull + 1) {}
++	uint64_t next() {
++		state ^= state << 13;
++		state ^= state >> 7;
++		state ^= state << 17;
++		return state;
++	}
++	uint64_t below(uint64_t n) { return next() % n; }
++};
++
++struct MacBenchmarkBatch {
++	Version cv;
++	std::vector<std::pair<uint64_t, uint64_t>> writes;
++	std::vector<std::pair<uint64_t, uint64_t>> reads;
++	std::vector<Version> readVersions;
++};
++
++StringRef macBenchmarkKey(Arena& arena, uint64_t n) {
++	uint8_t* bytes = new (arena) uint8_t[12];
++	bytes[0] = 'k';
++	bytes[1] = '/';
++	bytes[2] = 'x';
++	bytes[3] = '/';
++	for (int b = 7; b >= 0; --b) {
++		bytes[4 + (7 - b)] = uint8_t(n >> (8 * b));
++	}
++	return StringRef(bytes, 12);
++}
++
++} // namespace
++
++TEST_CASE("noSim/fdbserver/conflictset/macBenchmark") {
++	const std::string workload = params.get("workload").orDefault("points");
++	const int batches = params.getInt("batches").orDefault(3000);
++	const bool ranges = workload == "ranges";
++	ASSERT(ranges || workload == "points");
++	constexpr uint64_t KeySpace = 10'000'000;
++	const int writesPerBatch = 1000, readsPerBatch = 4000;
++
++	// The batches, made before anything is timed, in blocksizebench's order of draws.
++	MacBenchmarkRandom rng(1234);
++	std::vector<MacBenchmarkBatch> work(batches);
++	Version cv = 1000;
++	for (MacBenchmarkBatch& batch : work) {
++		batch.cv = cv;
++		std::vector<uint64_t> starts;
++		for (int i = 0; i < writesPerBatch; ++i) {
++			starts.push_back(rng.below(KeySpace));
++		}
++		std::sort(starts.begin(), starts.end());
++		uint64_t floor = 0;
++		for (uint64_t s : starts) {
++			if (s < floor) {
++				continue;
++			}
++			const uint64_t length = ranges ? 1 + rng.below(rng.below(10) == 0 ? 2000 : 20) : 1;
++			batch.writes.emplace_back(s, s + length);
++			floor = s + length;
++		}
++		for (int i = 0; i < readsPerBatch; ++i) {
++			const uint64_t s = rng.below(KeySpace);
++			const uint64_t length = ranges ? 1 + rng.below(rng.below(10) == 0 ? 2000 : 20) : 1;
++			batch.reads.emplace_back(s, s + length);
++			batch.readVersions.push_back(cv - 1 - Version(rng.below(500)));
++		}
++		cv += 10;
++	}
++
++	ConflictSet* cs = newConflictSet();
++	const ConflictSetStats atStart = getConflictSetStats(cs);
++	uint64_t hash = 1469598103934665603ull, conflicts = 0, writeRanges = 0;
++	for (const MacBenchmarkBatch& batch : work) {
++		Arena arena;
++		std::vector<CommitTransactionRef> trs(batch.reads.size() + 1);
++		for (size_t i = 0; i < batch.reads.size(); ++i) {
++			trs[i].read_snapshot = batch.readVersions[i];
++			trs[i].read_conflict_ranges.push_back(
++			    arena,
++			    KeyRangeRef(macBenchmarkKey(arena, batch.reads[i].first), macBenchmarkKey(arena, batch.reads[i].second)));
++		}
++		CommitTransactionRef& writer = trs.back();
++		writer.read_snapshot = batch.cv - 1;
++		for (const auto& [b, e] : batch.writes) {
++			writer.write_conflict_ranges.push_back(arena,
++			                                       KeyRangeRef(macBenchmarkKey(arena, b), macBenchmarkKey(arena, e)));
++		}
++		writeRanges += batch.writes.size();
++
++		std::vector<int> nonConflicting, tooOld;
++		{
++			ConflictBatch conflictBatch(cs);
++			for (const CommitTransactionRef& tr : trs) {
++				conflictBatch.addTransaction(tr, 0);
++			}
++			conflictBatch.detectConflicts(batch.cv, 0, nonConflicting, &tooOld);
++		}
++		ASSERT(tooOld.empty());
++		std::vector<uint8_t> status(trs.size(), 1);
++		for (int t : nonConflicting) {
++			status[t] = 0;
++		}
++		ASSERT(status.back() == 0);
++		for (size_t i = 0; i < batch.reads.size(); ++i) {
++			conflicts += status[i];
++			hash = (hash ^ status[i]) * 1099511628211ull;
++		}
++	}
++	const ConflictSetStats atEnd = getConflictSetStats(cs);
++	const double readSeconds = atEnd.checkReadSeconds - atStart.checkReadSeconds;
++	const double writeSeconds = atEnd.mergeSeconds - atStart.mergeSeconds;
++	const double readCount = double(batches) * readsPerBatch;
++	printf("MacBenchmark index=%s workload=%s batches=%d reads=%.0f writes=%llu readS=%.3f writeS=%.3f "
++	       "combineS=%.3f readsPerS=%.0f writesPerS=%.0f conflicts=%llu decisions=%016llx\n",
++	       conflictSetIndexName(cs),
++	       workload.c_str(),
++	       batches,
++	       readCount,
++	       (unsigned long long)writeRanges,
++	       readSeconds,
++	       writeSeconds,
++	       atEnd.combineSeconds - atStart.combineSeconds,
++	       readCount / readSeconds,
++	       double(writeRanges) / writeSeconds,
++	       (unsigned long long)conflicts,
++	       (unsigned long long)hash);
++	destroyConflictSet(cs);
++	return Void();
++}

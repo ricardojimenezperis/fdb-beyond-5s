@@ -1,0 +1,4 @@
+name=r2-points-v1 start=2026-10-31T00:24:32+01:00 end=2026-10-31T00:24:46+01:00 exit=0 cpu=7 sibling=15 topology=[7,7,0,0 15,7,0,0 ] docker_before=0 load_before=[0.94 2.10 6.81] dirty_kib_before=148
+cpu_busy=0.97292 sibling_busy=0.00142 hugepages=0 kernel=6.8.0-138-generic
+docker_env=[]
+command=[$ROOT/scratch/eval-v2-amd/standalone/v1/blocksizebench points 3000 1024]

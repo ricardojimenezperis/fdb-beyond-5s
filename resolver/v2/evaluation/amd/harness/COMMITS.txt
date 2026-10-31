@@ -1,0 +1,3 @@
+fdb 1dfa7ffe6a5210c66e36a628552d10a7046649d0 Add the by5 resolver harness and its trace generator
+v1 a8921c3babbaea00099cc8c4c8608e942e921120 Point the evidence manifest to the regenerated archive, with 6gib-amd/ and the corrected standalone label
+v2 22d9bb7a670037fe40070a0164fd6885dc981276 Resolve with btree-v2, with its task capacity set by BTREE_V2_TASKS

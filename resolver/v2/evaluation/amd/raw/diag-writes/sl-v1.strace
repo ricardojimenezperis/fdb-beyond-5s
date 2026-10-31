@@ -1,0 +1,32 @@
+3974319 write(1, "miniConflictSetTest complete\n", 29) = 29
+3974319 write(1, "skiplisttest cpu requested=5 run"..., 39) = 39
+3974319 write(1, "skiplisttest keyBytes=16 layout="..., 37) = 37
+3974319 openat(AT_FDCWD, "/etc/localtime", O_RDONLY|O_CLOEXEC) = 3
+3974319 write(1, "Test data generated: 500 batches"..., 54) = 54
+3974319 write(1, "Running\n", 8)        = 8
+3974319 write(1, "New conflict set: 2.301 sec\n", 28) = 28
+3974319 write(1, "                  0.543 Mtransac"..., 42) = 42
+3974319 write(1, "                  2.173 Mkeys/se"..., 34) = 34
+3974319 write(1, "Detect only:      2.210 sec\n", 28) = 28
+3974319 write(1, "                  0.566 Mtransac"..., 42) = 42
+3974319 write(1, "                  2.262 Mkeys/se"..., 34) = 34
+3974319 write(1, "Skiplist only:    1.995 sec\n", 28) = 28
+3974319 write(1, "                  0.627 Mtransac"..., 42) = 42
+3974319 write(1, "                  2.507 Mkeys/se"..., 34) = 34
+3974319 write(1, "Performance counters:\n", 22) = 22
+3974319 write(1, "               Build: 0.0488\n", 29) = 29
+3974319 write(1, "                 Add: 0.0399\n", 29) = 29
+3974319 write(1, "              Detect: 2.21\n", 27) = 27
+3974319 write(1, "              D.Sort: 0.195\n", 28) = 28
+3974319 write(1, "           D.Combine: 0.0114\n", 29) = 29
+3974319 write(1, "         D.CheckRead: 1.06\n", 27) = 27
+3974319 write(1, "   D.CheckIntraBatch: 0.00729\n", 30) = 30
+3974319 write(1, "        D.MergeWrite: 0.937\n", 28) = 28
+3974319 write(1, "      D.RemoveBefore: 1e-05\n", 28) = 28
+3974319 write(1, "0 entries in version history\n", 29) = 29
+3974319 write(1, "1182340 transactions without con"..., 38) = 38
+3974319 write(1, "index=btree-v1 decisionsHash=f42"..., 46) = 46
+3974319 write(1, "phases: checkReadS=1.0578 intraB"..., 91) = 91
+3974319 openat(AT_FDCWD, "/proc/self/statm", O_RDONLY) = 3
+3974319 write(1, "residentMiB=1226.4 validationMin"..., 58) = 58
+3974319 +++ exited with 0 +++

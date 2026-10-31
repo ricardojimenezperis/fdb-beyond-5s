@@ -2,7 +2,7 @@
 
 **Measured resolver revision:** development `dc2802fc2f6d76035e9d97bc621263e8b4f59cec`.  
 **Measured FDB integration:** `22a8ae9fba943b73cf149d21b05dfe6b07c6e013`, with the integrated benchmark at `3ba52abba955998757fa939b731fc3d2b8fa25b1`.  
-**Evaluation campaigns:** 29–30 October 2026, on Intel, AMD and Apple M3 processors.  
+**Evaluation campaigns:** 29–31 October 2026, on Intel, AMD and Apple M3 processors.  
 **Code:** branch [`resolver-v2`](https://github.com/ricardojimenezperis/foundationdb/tree/resolver-v2) of the FoundationDB fork, at `491d3f5a6fd02bea43b7b02502e35469afc2a53a`.
 
 ## Start here

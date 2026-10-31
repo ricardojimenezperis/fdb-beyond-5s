@@ -1,0 +1,4 @@
+name=head16-fdb start=2026-10-31T01:03:57+01:00 end=2026-10-31T01:04:00+01:00 exit=0 cpu=5 sibling=13 topology=[5,5,0,0 13,5,0,0 ] docker_before=0 load_before=[0.74 0.93 1.39] dirty_kib_before=100
+cpu_busy=0.80342 sibling_busy=0.00000 hugepages=0 kernel=6.8.0-138-generic
+docker_env=[-e SKIPLISTTEST_CPU=5 -e SKIPLISTTEST_KEY_BYTES=16 -e SKIPLISTTEST_KEY_LAYOUT=head -e SKIPLISTTEST_PER_BATCH=5000 -e SKIPLISTTEST_RANGE_SPAN=10]
+command=[$BUILDS/fdb/bin/fdbserver -r skiplisttest -C $ROOT/scratch/eval-v2-amd/scripts/fdb.cluster -s 1]

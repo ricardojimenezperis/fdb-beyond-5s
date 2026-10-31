@@ -1,0 +1,25 @@
+warmup-points-fdb exit=0
+warmup-points-v1 exit=0
+warmup-points-v2 exit=0
+r1-points-fdb exit=0
+r1-points-v1 exit=0
+r1-points-v2 exit=0
+r2-points-v1 exit=0
+r2-points-v2 exit=0
+r2-points-fdb exit=0
+r3-points-v2 exit=0
+r3-points-fdb exit=0
+r3-points-v1 exit=0
+warmup-ranges-fdb exit=0
+warmup-ranges-v1 exit=0
+warmup-ranges-v2 exit=0
+r1-ranges-fdb exit=0
+r1-ranges-v1 exit=0
+r1-ranges-v2 exit=0
+r2-ranges-v1 exit=0
+r2-ranges-v2 exit=0
+r2-ranges-fdb exit=0
+r3-ranges-v2 exit=0
+r3-ranges-fdb exit=0
+r3-ranges-v1 exit=0
+done

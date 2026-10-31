@@ -1,0 +1,13 @@
+by5keyprofile profile=0
+by5fictitious model=0 mode=cold segmentStart=57600 segmentBatches=9600 origin=1800000000 offset=1801562500 prehistoryBatches=57600 step=31250 minimumRealReadVersion=-1562500
+by5resolvertest format=2 backend=btree-v2 rate=65536 batch=2048 shortAgeUs=1562500 longPpm=0 conflictPpm=7300 prefix=12 domain=2000000000 warmupSeconds=6900 measureSeconds=300 windowUs=0 cpu=4 validate=1
+by5resolvertest running=4
+by5resolvertest memory_scope=pool_cap_for_capacity_history,no_byte_cap_for_fdb timing_valid=0
+by5fictitiousresult modelTraceDiffEarly=0 modelTraceDiffLate=0
+by5result offered=19660800 accepted=19517653 offeredHash=1c730f0978897d31 decisionsHash=bb77645a24d12b24 totalS=72.671893597 readS=21.251596212 writeS=44.086615324 cleanupS=0.000238419 p50ms=7.598400 p95ms=7.922173 p99ms=8.372068 usPerOffered=3.696284 usPerAccepted=3.723393
+by5age ageUs=1562500 accepted=19517653 conflicts=143147 rejectedWindow=0 rejectedMemory=0 target=143523 divergent=376
+by5age ageUs=10000000 accepted=0 conflicts=0 rejectedWindow=0 rejectedMemory=0 target=0 divergent=0
+by5age ageUs=20000000 accepted=0 conflicts=0 rejectedWindow=0 rejectedMemory=0 target=0 divergent=0
+by5age ageUs=30000000 accepted=0 conflicts=0 rejectedWindow=0 rejectedMemory=0 target=0 divergent=0
+by5acct backend=btree-v2 maxLiveSkipBytes=0 poolPhysicalBytes=65536000 maxMetadataBytes=0 maxReadScratchBytes=0 maxWriteScratchBytes=0 maxHistoryBytes=65536000 maxMeasuredHistoryBytes=65536000 maxHistoryPlusScratchBytes=65536000 maxBatchArenaBytes=106400 maxVmRssKiB=1909004 maxHugetlbKiB=0 walkChecks=96 walkMismatches=0
+by5lengths 16=11237890 24=11233422 32=11233367 40=11228870 48=11237177 56=11234499 64=11237975

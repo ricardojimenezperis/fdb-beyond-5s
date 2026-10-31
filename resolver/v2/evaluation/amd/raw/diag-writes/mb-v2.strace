@@ -1,0 +1,134 @@
+3974019 openat(AT_FDCWD, "/out", O_RDONLY|O_NONBLOCK|O_CLOEXEC|O_DIRECTORY) = 7
+3973992 openat(AT_FDCWD, "/usr/local/bin/../lib/x86_64-unknown-linux-gnu/libgcc_s.so.1", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+3973992 openat(AT_FDCWD, "/etc/ld.so.cache", O_RDONLY|O_CLOEXEC) = 8
+3973992 openat(AT_FDCWD, "/lib64/libgcc_s.so.1", O_RDONLY|O_CLOEXEC) = 7
+3974019 openat(AT_FDCWD, "/out/trace.0.0.0.0.0.1793402084.L10MQ4.0.1.xml", O_WRONLY|O_CREAT|O_EXCL|O_CLOEXEC, 0664) = 8
+3974019 write(8, "<?xml version=\"1.0\"?>\r\n<Trace>\r\n", 32) = 32
+3973992 openat(AT_FDCWD, "/proc/self/task/10/comm", O_RDWR) = 7
+3973992 write(7, "fdb-loopprofile", 15) = 15
+3973992 openat(AT_FDCWD, "/proc/self/statm", O_RDONLY) = 7
+3973992 openat(AT_FDCWD, "/proc/self/statm", O_RDONLY) = 7
+3973992 openat(AT_FDCWD, "/proc/zoneinfo", O_RDONLY) = 7
+3973992 openat(AT_FDCWD, "/proc/meminfo", O_RDONLY) = 9
+3973992 openat(AT_FDCWD, "/proc/stat", O_RDONLY) = 7
+3973992 write(1, "startingConfiguration: start\n", 29) = 29
+3973992 write(1, "useDB: false\n", 13)  = 13
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 194 <unfinished ...>
+3973992 write(1, "Run test:UnitTests start\n", 25 <unfinished ...>
+3974019 <... write resumed>)            = 194
+3973992 <... write resumed>)            = 25
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 310 <unfinished ...>
+3973992 write(1, "setting batches = 300\n", 22 <unfinished ...>
+3974019 <... write resumed>)            = 310
+3973992 <... write resumed>)            = 22
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 206 <unfinished ...>
+3973992 write(1, "setting workload = points\n", 26 <unfinished ...>
+3974019 <... write resumed>)            = 206
+3973992 <... write resumed>)            = 26
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 828) = 828
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 229 <unfinished ...>
+3973992 write(1, "setting up test (UnitTests)...\n", 31 <unfinished ...>
+3974019 <... write resumed>)            = 229
+3973992 <... write resumed>)            = 31
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 328) = 328
+3973992 write(1, "Test received trigger for setup."..., 35 <unfinished ...>
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 246 <unfinished ...>
+3973992 <... write resumed>)            = 35
+3974019 <... write resumed>)            = 246
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 233) = 233
+3973992 write(1, "running test (UnitTests)...\n", 28 <unfinished ...>
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 247 <unfinished ...>
+3973992 <... write resumed>)            = 28
+3974019 <... write resumed>)            = 247
+3973992 write(1, "Found 1 tests\n", 14 <unfinished ...>
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 193 <unfinished ...>
+3973992 <... write resumed>)            = 14
+3974019 <... write resumed>)            = 193
+3973992 write(1, "Testing noSim/fdbserver/conflict"..., 49 <unfinished ...>
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 294 <unfinished ...>
+3973992 <... write resumed>)            = 49
+3974019 <... write resumed>)            = 294
+3973992 --- SIGPROF {si_signo=SIGPROF, si_code=SI_TKILL, si_pid=1, si_uid=0} ---
+3973992 --- SIGPROF {si_signo=SIGPROF, si_code=SI_TKILL, si_pid=1, si_uid=0} ---
+3973992 --- SIGPROF {si_signo=SIGPROF, si_code=SI_TKILL, si_pid=1, si_uid=0} ---
+3973992 write(1, "MacBenchmark index=btree-v2 work"..., 203) = 203
+3973992 --- SIGPROF {si_signo=SIGPROF, si_code=SI_TKILL, si_pid=1, si_uid=0} ---
+3973992 openat(AT_FDCWD, "unittests", O_RDONLY|O_NONBLOCK|O_CLOEXEC|O_DIRECTORY) = 7
+3973992 unlink("unittests")             = -1 EISDIR (Is a directory)
+3973992 write(1, "UnitTests complete\n", 19) = 19
+3973992 write(1, "UnitTests complete\n", 19) = 19
+3973992 write(1, "checking test (UnitTests)...\n", 29) = 29
+3973992 write(1, "fetching metrics (UnitTests)...\n", 32) = 32
+3973992 write(1, "Metric (0, 0): UnitTests.Test Ca"..., 59) = 59
+3973992 write(1, "Metric (0, 1): UnitTests.Test Ca"..., 58) = 58
+3973992 write(1, "Metric (0, 2): UnitTests.Test Ca"..., 56) = 56
+3973992 write(1, "Metric (0, 3): UnitTests.Total w"..., 67) = 67
+3973992 write(1, "Metric (0, 4): UnitTests.Total f"..., 58) = 58
+3973992 write(1, "Test complete\n", 14) = 14
+3973992 write(1, "1 test clients passed; 0 test cl"..., 45) = 45
+3973992 write(1, "Run test:UnitTests Done.\n", 25) = 25
+3973992 write(1, "\n", 1)               = 1
+3973992 write(1, "1 tests passed; 0 tests failed.\n", 32) = 32
+3973992 write(1, "\n", 1)               = 1
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 260) = 260
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 247) = 247
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 241) = 241
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 211) = 211
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 244) = 244
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 263) = 263
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 382) = 382
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 227) = 227
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 250) = 250
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 233) = 233
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 232) = 232
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 231) = 231
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 236) = 236
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 267) = 267
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 231) = 231
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 226) = 226
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 251) = 251
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 357) = 357
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 251) = 251
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 427) = 427
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 253) = 253
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 233) = 233
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 231) = 231
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 267) = 267
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 238) = 238
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 276) = 276
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 226) = 226
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 253) = 253
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 255) = 255
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 231) = 231
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 236) = 236
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 282) = 282
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 238) = 238
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 278) = 278
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 222) = 222
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 271) = 271
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 207) = 207
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 237) = 237
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 242) = 242
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 250) = 250
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 249) = 249
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 247) = 247
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 249) = 249
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 264) = 264
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 225) = 225
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 252) = 252
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 265) = 265
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 248) = 248
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 254) = 254
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 246) = 246
+3974019 write(8, "<Event Severity=\"30\" Time=\"17934"..., 270) = 270
+3974019 write(8, "<Event Severity=\"20\" Time=\"17934"..., 572) = 572
+3974019 write(8, "<Event Severity=\"20\" Time=\"17934"..., 572) = 572
+3974019 write(8, "<Event Severity=\"20\" Time=\"17934"..., 582) = 582
+3974019 write(8, "<Event Severity=\"20\" Time=\"17934"..., 627) = 627
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 1693) = 1693
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 235) = 235
+3974019 write(8, "<Event Severity=\"10\" Time=\"17934"..., 252) = 252
+3974019 write(8, "</Trace>\r\n", 10)    = 10
+3974020 +++ exited with 0 +++
+3974019 +++ exited with 0 +++
+3973992 +++ exited with 0 +++

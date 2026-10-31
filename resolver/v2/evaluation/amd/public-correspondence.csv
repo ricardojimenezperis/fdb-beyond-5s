@@ -1,0 +1,4 @@
+candidate,measured_revision,published_equivalent,difference,published_head,later_production_change
+FDB,1dfa7ffe6a5210c66e36a628552d10a7046649d0,1dfa7ffe6a5210c66e36a628552d10a7046649d0,none,491d3f5a6fd02bea43b7b02502e35469afc2a53a,
+btree-v1,a8921c3babbaea00099cc8c4c8608e942e921120,a8921c3babbaea00099cc8c4c8608e942e921120,none,491d3f5a6fd02bea43b7b02502e35469afc2a53a,
+resolver v2,22d9bb7a670037fe40070a0164fd6885dc981276,7c7638a92ca780eb6d8622b2dc84c1c9d128e7c9,tests only (fdbserver/resolver/resolver1/tests/tempconflictbtreetests.cpp +279 -1),491d3f5a6fd02bea43b7b02502e35469afc2a53a,36dcc1a9d53e7277a3299672021c49f62a16799e write reservation (reserve stays 35 blocks for this campaign's key lengths; cost of the new computation not measured)

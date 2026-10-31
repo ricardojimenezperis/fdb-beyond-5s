@@ -1,0 +1,1 @@
+clang++ -std=c++20 -O3 -DNDEBUG -stdlib=libc++ -Iresolver1 resolver1/pagepool.cpp resolver1/keystore.cpp resolver1/bnodestore.cpp resolver1/tempconflictbtree.cpp resolver1/bench/blocksizebench.cpp -o blocksizebench

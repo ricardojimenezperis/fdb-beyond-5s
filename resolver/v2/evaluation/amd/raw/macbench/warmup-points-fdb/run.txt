@@ -1,0 +1,4 @@
+name=warmup-points-fdb start=2026-10-31T00:18:34+01:00 end=2026-10-31T00:18:44+01:00 exit=0 cpu=7 sibling=15 topology=[7,7,0,0 15,7,0,0 ] docker_before=0 load_before=[0.70 4.68 9.56] dirty_kib_before=120
+cpu_busy=0.95842 sibling_busy=0.00000 hugepages=0 kernel=6.8.0-138-generic
+docker_env=[]
+command=[$BUILDS/fdb/bin/fdbserver -r unittests -f noSim/fdbserver/conflictset/macBenchmark --test_workload=points --test_batches=3000 -L /out]

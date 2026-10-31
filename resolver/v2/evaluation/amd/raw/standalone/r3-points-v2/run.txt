@@ -1,0 +1,4 @@
+name=r3-points-v2 start=2026-10-31T00:25:00+01:00 end=2026-10-31T00:25:14+01:00 exit=0 cpu=7 sibling=15 topology=[7,7,0,0 15,7,0,0 ] docker_before=0 load_before=[0.96 2.01 6.65] dirty_kib_before=0
+cpu_busy=0.97465 sibling_busy=0.00000 hugepages=0 kernel=6.8.0-138-generic
+docker_env=[]
+command=[$ROOT/scratch/eval-v2-amd/standalone/v2/blocksizebench points 3000 1024]

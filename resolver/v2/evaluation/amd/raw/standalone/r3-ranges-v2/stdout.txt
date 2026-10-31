@@ -1,0 +1,1 @@
+block=2048 internal=40 leaf=59 workload=ranges batches=3000 reads=12000000 writes=2967779 readS=3.608 writeS=1.388 totalS=4.996 readsPerS=3325671 writesPerS=2137912 conflicts=3479753 reclaimCV=0 decisions=df42a6e5c89796ea

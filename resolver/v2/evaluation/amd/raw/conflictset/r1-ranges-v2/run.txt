@@ -1,0 +1,4 @@
+name=r1-ranges-v2 start=2026-10-31T00:17:39+01:00 end=2026-10-31T00:17:43+01:00 exit=0 cpu=7 sibling=15 topology=[7,7,0,0 15,7,0,0 ] docker_before=0 load_before=[1.10 5.52 10.11] dirty_kib_before=88
+cpu_busy=0.91017 sibling_busy=0.00236 hugepages=0 kernel=6.8.0-138-generic
+docker_env=[]
+command=[$BUILDS/v2/bin/fdbserver -r unittests -f noSim/fdbserver/conflictset/benchmark --test_workload=ranges --test_seed=1 --test_batches=2000 --test_warmupBatches=1000 --test_transactionsPerBatch=500 --knob_paged_resolver_pool_pages=16384 -L /out]

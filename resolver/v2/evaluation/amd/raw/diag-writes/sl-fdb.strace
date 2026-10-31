@@ -1,0 +1,31 @@
+3974156 write(1, "miniConflictSetTest complete\n", 29) = 29
+3974156 write(1, "skiplisttest cpu requested=5 run"..., 39) = 39
+3974156 write(1, "skiplisttest keyBytes=16 layout="..., 37) = 37
+3974156 write(1, "Test data generated: 500 batches"..., 54) = 54
+3974156 write(1, "Running\n", 8)        = 8
+3974156 write(1, "New conflict set: 1.476 sec\n", 28) = 28
+3974156 write(1, "                  0.847 Mtransac"..., 42) = 42
+3974156 write(1, "                  3.387 Mkeys/se"..., 34) = 34
+3974156 write(1, "Detect only:      1.386 sec\n", 28) = 28
+3974156 write(1, "                  0.902 Mtransac"..., 42) = 42
+3974156 write(1, "                  3.607 Mkeys/se"..., 34) = 34
+3974156 write(1, "Skiplist only:    1.053 sec\n", 28) = 28
+3974156 write(1, "                  1.188 Mtransac"..., 42) = 42
+3974156 write(1, "                  4.750 Mkeys/se"..., 34) = 34
+3974156 write(1, "Performance counters:\n", 22) = 22
+3974156 write(1, "               Build: 0.047\n", 28) = 28
+3974156 write(1, "                 Add: 0.0411\n", 29) = 29
+3974156 write(1, "              Detect: 1.39\n", 27) = 27
+3974156 write(1, "              D.Sort: 0.2\n", 26) = 26
+3974156 write(1, "           D.Combine: 0.0108\n", 29) = 29
+3974156 write(1, "         D.CheckRead: 0.528\n", 28) = 28
+3974156 write(1, "   D.CheckIntraBatch: 0.0074\n", 29) = 29
+3974156 write(1, "        D.MergeWrite: 0.524\n", 28) = 28
+3974156 write(1, "      D.RemoveBefore: 0.113\n", 28) = 28
+3974156 write(1, "429075 entries in version histor"..., 34) = 34
+3974156 write(1, "1182340 transactions without con"..., 38) = 38
+3974156 write(1, "index=skiplist decisionsHash=f42"..., 46) = 46
+3974156 write(1, "phases: checkReadS=0.5284 intraB"..., 91) = 91
+3974156 openat(AT_FDCWD, "/proc/self/statm", O_RDONLY) = 3
+3974156 write(1, "residentMiB=237.1 validationMinR"..., 57) = 57
+3974156 +++ exited with 0 +++

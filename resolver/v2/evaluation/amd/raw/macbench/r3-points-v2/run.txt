@@ -1,0 +1,4 @@
+name=r3-points-v2 start=2026-10-31T00:20:41+01:00 end=2026-10-31T00:20:54+01:00 exit=0 cpu=7 sibling=15 topology=[7,7,0,0 15,7,0,0 ] docker_before=0 load_before=[1.27 3.48 8.47] dirty_kib_before=340
+cpu_busy=0.97235 sibling_busy=0.00077 hugepages=0 kernel=6.8.0-138-generic
+docker_env=[]
+command=[$BUILDS/v2/bin/fdbserver -r unittests -f noSim/fdbserver/conflictset/macBenchmark --test_workload=points --test_batches=3000 --knob_paged_resolver_pool_pages=16384 -L /out]
