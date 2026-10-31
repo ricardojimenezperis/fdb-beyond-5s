@@ -233,10 +233,12 @@ V1 and FDB long-trace timings are from other sessions and are not used to calcul
 
 The Intel figure package contains the original short-benchmark records, extracted CSVs, source and binary manifests, and `make_figures.py`. The warm-up rows remain in the standalone CSV and are filtered out by the plotting script. The earlier standalone reference is retained only in its historical CSV.
 
-Two larger per-batch datasets are distributed as compressed release assets. Place them in `evaluation/hp/data/`, check them against `ASSETS.sha256`, and regenerate:
+Two larger per-batch datasets are distributed as compressed assets of the release [`resolver-v2-evaluation`](https://github.com/ricardojimenezperis/fdb-beyond-5s/releases/tag/resolver-v2-evaluation). Download them into `evaluation/hp/data/`, check them against `ASSETS.sha256`, and regenerate:
 
 ```sh
 cd evaluation/hp/data
+curl -LO https://github.com/ricardojimenezperis/fdb-beyond-5s/releases/download/resolver-v2-evaluation/longrun-per-batch.csv.gz
+curl -LO https://github.com/ricardojimenezperis/fdb-beyond-5s/releases/download/resolver-v2-evaluation/longrun-resolver-v2-time-per-batch.csv.gz
 sha256sum -c ../ASSETS.sha256
 cd ..
 python3 make_figures.py --from-csv

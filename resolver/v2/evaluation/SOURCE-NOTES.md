@@ -54,7 +54,7 @@ for this edition.
 
 ## Publication, 31 October 2026
 
-`hp/` is published as received: its records, CSVs, manifests, script and `SHA256SUMS` are unchanged, and all 471 checksums verify. Historical names of development candidates in the campaign files document where the records come from; the evaluation's tables, figures and conclusions compare only FDB, v1 and v2. The two compressed per-batch datasets are included in `hp/data/` and verify against `hp/ASSETS.sha256`, so `python3 make_figures.py --from-csv` runs from `hp/` without further downloads.
+`hp/` is published as received: its records, CSVs, manifests, script and `SHA256SUMS` are unchanged, and all 471 checksums verify. Historical names of development candidates in the campaign files document where the records come from; the evaluation's tables, figures and conclusions compare only FDB, v1 and v2. The two compressed per-batch datasets are assets of the release [`resolver-v2-evaluation`](https://github.com/ricardojimenezperis/fdb-beyond-5s/releases/tag/resolver-v2-evaluation), as the package intended; downloaded into `hp/data/`, they verify against `hp/ASSETS.sha256`. They were briefly committed in `hp/data/` and remain in the repository history.
 
 The copies of the Intel figures in `../figs/` carry an embedded content-credential manifest added when they were first published. Apart from that metadata they match `hp/figures/`.
 
