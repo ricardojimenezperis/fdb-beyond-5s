@@ -6,7 +6,7 @@ Resolver v2 was checked at three levels: component tests against reference confl
 
 ## Source identity
 
-The measured component is development commit `dc2802fc2f6d76035e9d97bc621263e8b4f59cec`. Its FDB integration is `22a8ae9fba943b73cf149d21b05dfe6b07c6e013`; `3ba52abba955998757fa939b731fc3d2b8fa25b1` adds the integrated benchmark. The Intel campaign checked all 39 files of `resolver1` against the development snapshot and found them byte-identical.
+The measured component is development commit `dc2802fc2f6d76035e9d97bc621263e8b4f59cec`. Its FDB integration is `22a8ae9fba943b73cf149d21b05dfe6b07c6e013`; `3ba52abba955998757fa939b731fc3d2b8fa25b1` adds the integrated benchmark. Of the 39 files of `resolver1`, 38 match the development snapshot; the test file `tests/tempconflictbtreetests.cpp` corresponds to an earlier development state and is not part of the measured FDB executables. The campaign manifest, which reports 39 matching files, is kept as received; the [public correspondence](evaluation/PUBLIC-CORRESPONDENCE.md#how-the-correspondence-was-checked) gives the correction.
 
 The sequential reference is fork commit `5a07ab1936aaa6c01b5f36191c5446dee0a3d674`. Public commit `c44fd2247be51c26ca48c56dcc0587fb7b54ea04` has the same `resolver1` directory. This correspondence covers the component sources; it does not identify the measured executable or establish that its surrounding integration is identical.
 
