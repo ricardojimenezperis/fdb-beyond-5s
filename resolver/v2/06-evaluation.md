@@ -356,6 +356,10 @@ Both trees discard for the first time 702.9 seconds into the segment, and the mi
 
 One machine and one session; no value here is compared with the Intel or Apple M3 results or with the 29 October session. The timings are of the batch path and the harness on one core, not cluster throughput. The results are those of the measured revisions listed above.
 
+## Intel: memory-latency calibration
+
+A separate calibration on 31 October measured random dependent loads on CPU 6 of the Intel machine, the core of its benchmark campaigns, with ordinary 4 KiB pages and without fixing the frequency. The median latency is 0.70 ns per access with a working set in the L1 data cache, 3.64 ns at 1 MiB, 19.2 ns at 16 MiB and 163.2 ns at 512 MiB, beyond the 36 MiB L3. These values include address translation. The [calibration note](evaluation/intel/memlat/README.md) gives the method, all sizes and the original records. It is not a benchmark of the resolver.
+
 ## Reproducing the figures
 
 The Intel figure package contains the original short-benchmark records, extracted CSVs, source and binary manifests, and `make_figures.py`. The warm-up rows remain in the standalone CSV and are filtered out by the plotting script. The earlier standalone reference is retained only in its historical CSV.

@@ -24,3 +24,26 @@ The model and its JSON are published as received, with their original checksums:
 | Clustered reads, including the initial leaf search | 261,795 | 23,643 |
 
 The figures were drawn with Python 3.12.1 and matplotlib 3.11.2; a second run in an empty directory gave byte-identical SVG and PNG files.
+
+## Analytical expectation and long-trace tail
+
+Two later calculations complement the model. Neither is a new performance measurement of resolver v2.
+
+| File | Content |
+|---|---|
+| [`partition-comparison-expectation.md`](partition-comparison-expectation.md) | Method and reproduction of the analytical expectation |
+| [`partition-comparison-expectation.py`](partition-comparison-expectation.py) | Expected comparison counts for the uniform example under independent uniform read begins, without sampling; needs NumPy and SciPy |
+| [`partition-comparison-expectation.json`](partition-comparison-expectation.json) | Its output |
+| [`requirements-expectation.txt`](requirements-expectation.txt) | Dependency versions of the reference run |
+| [`longtrace-tail-change.py`](longtrace-tail-change.py) | Observed change over the last 600 trace seconds of the Intel long trace, from the release asset `longrun-per-batch.csv.gz`; Python 3, no dependencies |
+| [`longtrace-tail-change.json`](longtrace-tail-change.json) | Its output |
+| `SHA256SUMS-article-addendum` | Checksums of these six files |
+
+The expectation gives 204,286 and 90,463 comparisons for internal routing, and 258,920 and 144,877 including the initial leaf search, against the counted 204,408, 90,496, 259,091 and 144,956 of the generated batch. Floating-point results can differ in their last digits between platforms.
+
+Over trace seconds [4,800, 5,400], the endpoint change in retained history is −3.65625 seconds (−0.6233%) for both trees, and FDB's counted history memory grows by 222,464 bytes (+0.0035%). These are endpoint differences, not fitted rates; the [evaluation](../06-evaluation.md#retention-and-memory) reports a least-squares slope over the last 1,500 seconds.
+
+```sh
+python3 longtrace-tail-change.py ../evaluation/hp/data/longrun-per-batch.csv.gz
+shasum -a 256 -c SHA256SUMS-article-addendum
+```

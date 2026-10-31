@@ -1,0 +1,34 @@
+{
+  "kind": "observed endpoint changes, not fitted rates",
+  "input_asset": "longrun-per-batch.csv.gz",
+  "input_sha256": "f1effa8256b2e136587706946ebccdd2a9a95f0925f3b8a3ae5a46a15492abe6",
+  "trace_start_s": 4800.0,
+  "trace_end_s": 5400.0,
+  "interval_trace_seconds": 600.0,
+  "first_batch": 153599,
+  "last_batch": 172799,
+  "changes": {
+    "btree_v1_retention": {
+      "start": 586.59375,
+      "end": 582.9375,
+      "change": -3.65625,
+      "change_percent_of_start": -0.6233019018699058,
+      "unit": "seconds"
+    },
+    "resolver_v2_retention": {
+      "start": 586.59375,
+      "end": 582.9375,
+      "change": -3.65625,
+      "change_percent_of_start": -0.6233019018699058,
+      "unit": "seconds"
+    },
+    "fdb265_history_memory": {
+      "start": 6354061728.0,
+      "end": 6354284192.0,
+      "change": 222464.0,
+      "change_percent_of_start": 0.0035011306078391313,
+      "unit": "bytes",
+      "change_decimal_MB": 0.222464
+    }
+  }
+}

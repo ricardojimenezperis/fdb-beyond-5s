@@ -1,0 +1,79 @@
+{
+  "kind": "analytical comparison expectation, not a benchmark",
+  "reads": 10000,
+  "children_by_internal_depth": [
+    2,
+    28,
+    28,
+    28,
+    28
+  ],
+  "entries_per_leaf": 41,
+  "population_tail_probability": 1e-13,
+  "rows": [
+    {
+      "level": 0,
+      "nodes": 1,
+      "boundaries_per_node": 1,
+      "mean_reads": 10000.0,
+      "expected_visited_nodes": 1.0,
+      "mean_reads_if_visited": 10000.0,
+      "independent": 10000.0,
+      "grouped": 13.368999499045602
+    },
+    {
+      "level": 1,
+      "nodes": 2,
+      "boundaries_per_node": 27,
+      "mean_reads": 5000.0,
+      "expected_visited_nodes": 2.0,
+      "mean_reads_if_visited": 5000.0,
+      "independent": 48571.428571428565,
+      "grouped": 507.7867839566461
+    },
+    {
+      "level": 2,
+      "nodes": 56,
+      "boundaries_per_node": 27,
+      "mean_reads": 178.57142857142858,
+      "expected_visited_nodes": 56.0,
+      "mean_reads_if_visited": 178.57142857142858,
+      "independent": 48571.428571428565,
+      "grouped": 6992.737932045806
+    },
+    {
+      "level": 3,
+      "nodes": 1568,
+      "boundaries_per_node": 27,
+      "mean_reads": 6.377551020408164,
+      "expected_visited_nodes": 1565.3409453694164,
+      "mean_reads_if_visited": 6.3883846069330446,
+      "independent": 48571.428571428565,
+      "grouped": 34984.30629478429
+    },
+    {
+      "level": 4,
+      "nodes": 43904,
+      "boundaries_per_node": 27,
+      "mean_reads": 0.22776967930029154,
+      "expected_visited_nodes": 8942.999849137645,
+      "mean_reads_if_visited": 1.1181930189749785,
+      "independent": 48571.428571428565,
+      "grouped": 47964.4148491137
+    },
+    {
+      "level": 5,
+      "nodes": 1229312,
+      "entries_per_leaf": 41,
+      "mean_reads": 0.008134631403581841,
+      "expected_visited_nodes": 9959.44094047314,
+      "mean_reads_if_visited": 1.004072423318666,
+      "independent": 54634.14634146342,
+      "grouped": 54414.24165438591
+    }
+  ],
+  "independent_internal": 204285.71428571426,
+  "grouped_internal": 90462.61485939949,
+  "independent_total": 258919.8606271777,
+  "grouped_total": 144876.8565137854
+}
