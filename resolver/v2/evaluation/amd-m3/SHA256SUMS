@@ -1,0 +1,14 @@
+0706bff9f3846583487b7c3622c05498729c07980ff8354f8f9a9b251a9ca86a  NOTE.md
+4ec5981aa9c8b5f7a8ee4f1c47d599cc2420f89ecfb0a40c1e4d5f958bb533a6  data/amd-fdb-integrated-bench-runs.csv
+4c820b6a3bbf81bc0685a1edffbf34408d8d69ef5f0bcb5878d458458bcba477  data/m3-standalone-runs.csv
+f19b3dc4bf3ce619829073d5924cc583ecf7b24fe65126e60a86477372f48a1d  figures/fig-v2-eval-amd-fdb-integrated-bench-rates.png
+457ffd53a1614614d35b0ca1ce13221c33bb1319f2fe30ebf4c2edf899483f14  figures/fig-v2-eval-amd-fdb-integrated-bench-rates.svg
+ddf4312c3900d23c3ca16faed4fbd078d4c72440ef0653ec6b20a816887e10bf  figures/fig-v2-eval-amd-fdb-integrated-bench-vs-fdb.png
+5e7f07a7438e6da3c0755a25ad1f57988aea3282b25c2e4a74636fcbd5aa0b5e  figures/fig-v2-eval-amd-fdb-integrated-bench-vs-fdb.svg
+14e5ae252c0627d5f08f6bcdc305f62bdc39c85ce7867b058bd5a062be6922e2  figures/fig-v2-eval-m3-standalone-reads.png
+18fba80c7834944b912adc901b555108c2a58b0870aed78b7982ce767ea00baa  figures/fig-v2-eval-m3-standalone-reads.svg
+ed25b3fd4b2e24d588424bfc306ccdf1ee1331dcd8b8cab6ed1f941449871eda  figures/fig-v2-eval-m3-standalone-times.png
+c768426d60c2af76ea8581eeb533a62a0c7f68239eae707fc7605fc99cde066f  figures/fig-v2-eval-m3-standalone-times.svg
+25871a335a10af9a8efaa6c72a31ba5e413ad03ef5c536c16cfabc9d9f9ade69  figures/fig-v2-eval-m3-standalone-writes.png
+d4626bb3a8693e74d6ea5a71a570eb0e73c5af02eb59b2f3d542da501bfbe86a  figures/fig-v2-eval-m3-standalone-writes.svg
+9bb150b576499b2e7baf55a3d5fae1058ecac46e209faa13955d13f301622ed6  make_figures.py

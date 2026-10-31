@@ -10,6 +10,8 @@ The candidates are FDB's original skip-list conflict history, the sequential B+ 
 
 The measured v2 sources are development commit `dc2802fc2f6d76035e9d97bc621263e8b4f59cec`, integrated into the fork at `22a8ae9fba943b73cf149d21b05dfe6b07c6e013`. Commit `3ba52abba955998757fa939b731fc3d2b8fa25b1` adds the integrated benchmark. The Intel campaign checked that all 39 files of `resolver1` match the development snapshot. These are the identities of the measured sources; a later public commit or a matching decision hash does not by itself identify the same executable.
 
+All the measurements in this document predate one later change to the component: the reservation of room for a write's longest keys before it is stored, which the public source series adds as a separate commit. On the benchmark workloads the corrected code makes the same decisions, but that does not make these results measurements of it. The [evidence register](07-evidence-and-validation.md#write-reservation-after-the-measurements) describes the change.
+
 The sequential fork reference is `5a07ab1936aaa6c01b5f36191c5446dee0a3d674`. Its `resolver1` directory was checked against public commit `c44fd2247be51c26ca48c56dcc0587fb7b54ea04`; that correspondence concerns the component sources, not the whole executable. The [Intel manifest](evaluation/hp/MANIFEST.md) records the measured integration commits, binary hashes, build commands and timer definitions. Later correspondence updates are recorded in the [source notes](evaluation/SOURCE-NOTES.md).
 
 Short benchmarks have three measured rounds. Unless stated otherwise, tables give medians of the absolute values. Ratio tables and plotted ratio markers give the median of the three same-round quotients, which can differ from the quotient of the absolute medians. Dots show individual rounds and horizontal marks show medians; they are not confidence intervals. Throughput ratios above one are faster; time ratios below one are faster.
@@ -71,20 +73,38 @@ All runs produce decision hash `4787dbf4af9b9ca8` with 29,209 conflicts for poin
 
 ### AMD
 
-The available AMD comparison is the integrated benchmark from 29 October, with three rounds. The contributor reports identical decisions across its runs. The supplied summary gives the following medians of same-round time ratios:
+The AMD machine has a Ryzen 7 7700 and runs Linux 6.8. Its campaign of 29 October uses the same workload, 3,000 batches and 12,000,000 reads per run, and pools of 16,384 pages. Each run executes in the `foundationdb/build:rockylinux9-latest` container, pinned to CPU 7, with its working files in memory. The builds use Clang 19.1.5 in Release mode. Each binary is a fork commit plus one commit that adds the benchmark; the [AMD and Apple M3 note](evaluation/amd-m3/NOTE.md) records the commits and `fdbserver` hashes. Values are recalculated from the [run CSV](evaluation/amd-m3/data/amd-fdb-integrated-bench-runs.csv).
+
+| Candidate | Point reads/s | Point writes/s | Range reads/s | Range writes/s |
+|---|---:|---:|---:|---:|
+| FDB | 2,584,290 | 1,534,894 | 3,072,748 | 2,519,023 |
+| v1 | 906,635 | 889,155 | 2,033,537 | 1,826,478 |
+| v2 | 1,811,036 | 806,980 | 3,211,232 | 1,758,157 |
+
+The median paired v2/FDB throughput ratios are 0.702 for point reads, 1.047 for range reads, 0.526 for point writes and 0.699 for range writes. For v1 they are 0.351, 0.662, 0.580 and 0.727.
+
+![Read and write throughput in the integrated custom benchmark on AMD.](figs/fig-v2-eval-amd-fdb-integrated-bench-rates.svg)
+
+*Figure E11. AMD read and write rates in the custom workload through FDB's resolver, three rounds (dots) and their median (bar). V2 reads ranges faster than FDB and points at about 70% of its rate; its writes remain below both FDB and v1. Higher is better.*
+
+![The same AMD runs relative to FDB within each round.](figs/fig-v2-eval-amd-fdb-integrated-bench-vs-fdb.svg)
+
+*Figure E12. The same runs, normalized against FDB within each round. Higher is better.*
+
+The same records give these medians of same-round time ratios:
 
 | Workload | Timed phase | v2 / v1 | v2 / FDB |
 |---|---|---:|---:|
-| Points | Read checking | 0.50 | 1.43 |
-| Points | Write application | 1.10 | 1.90 |
-| Points | Sum of timed phases | 0.62 | 1.57 |
-| Ranges | Read checking | 0.63 | 0.95 |
-| Ranges | Write application | 1.04 | 1.43 |
-| Ranges | Sum of timed phases | 0.72 | 1.07 |
+| Points | Read checking | 0.499 | 1.425 |
+| Points | Write application | 1.102 | 1.902 |
+| Points | Read plus write | 0.621 | 1.567 |
+| Ranges | Read checking | 0.633 | 0.955 |
+| Ranges | Write application | 1.039 | 1.431 |
+| Ranges | Read plus write | 0.721 | 1.067 |
 
-Lower is better. The read-time ratios correspond to approximately 0.70× FDB's point-read rate and 1.05× its range-read rate. V2 reduces read time relative to v1 on both workloads, but write time is higher.
+Lower is better. V2 halves v1's point-read time and cuts its range-read time by about a third, but its write time is higher than v1's and FDB's. All runs produce the same decision hashes as on Intel, `4787dbf4af9b9ca8` for points and `df42a6e5c89796ea` for ranges.
 
-The campaign lasted about five minutes. Candidate order was fixed within every round, there was no warm-up, and neither CPU 15 occupancy nor concurrent container activity was recorded. The total is a sum of instrumented phases, not wall-clock execution time. These limitations apply to the AMD table; the newer controlled AMD campaigns have not yet supplied results for this document.
+The session lasted about five minutes, with three rounds and no warm-up. Candidate order was fixed within every round, and the run also included development candidates outside this comparison, which are not reported. The load on the other cores was not recorded. Read plus write is the sum of two instrumented phases, not wall-clock execution time.
 
 ## Custom standalone benchmark
 
@@ -113,16 +133,30 @@ One warm-up run per candidate and workload is excluded. Three measured rounds al
 
 All 16 warm-up and measured executions exit successfully, retain `reclaimCV=0` and produce the expected decision hashes. The previous standalone campaign used `073fcbb9af`, whose source differs from the sequential fork baseline. Its records are preserved in a separate historical CSV and are excluded from these tables and figures. The earlier 2.23×/1.58× Intel read ratios are superseded by this campaign.
 
-### Apple M3: separately reported campaign
+### Apple M3: standalone campaign
 
-The Apple M3 campaign reports these medians of paired throughput ratios over three rounds:
+The Apple M3 Pro campaign ran on 29 October under macOS 27.0.1, with Apple clang 15.0.0 and `-std=c++20 -O3 -DNDEBUG`, 3,000 batches, a 1,024 MiB budget and 2 KiB blocks. Its v2 executable is `dc2802fc2f` with the benchmark's task count set to 16. Its baseline is the standalone v1 at development commit `073fcbb9af`, the same baseline as the earlier Intel standalone campaign, not the fork baseline `5a07ab1936` of the Intel tables above. Its algorithm and decisions are v1's, but its source differs. The M3 ratios are therefore kept separate from the Intel fork-v1 comparison. Values are recalculated from the [run CSV](evaluation/amd-m3/data/m3-standalone-runs.csv).
 
-| Workload | Reads: v2 / reported baseline | Writes: v2 / reported baseline |
-|---|---:|---:|
-| Points | 2.23 | 0.95 |
-| Ranges | 1.50 | 0.92 |
+| Workload | Operation | v1 operations/s | v2 operations/s | Paired v2 / v1 throughput |
+|---|---|---:|---:|---:|
+| Points | Reads | 1,059,376 | 2,357,646 | 2.226 |
+| Ranges | Reads | 2,203,399 | 3,301,089 | 1.504 |
+| Points | Writes | 1,102,537 | 1,049,776 | 0.952 |
+| Ranges | Writes | 1,903,179 | 1,752,533 | 0.919 |
 
-Load before each run was not recorded. The campaign summary does not identify the standalone baseline's source commit, so these ratios are kept separate from the Intel fork-v1 comparison. The AMD/M3 run files and figure package have not been included in the evidence bundle accompanying this document; the table preserves the contributor's reported values.
+![Standalone read throughput on Apple M3.](figs/fig-v2-eval-m3-standalone-reads.svg)
+
+*Figure E13. Apple M3 standalone read throughput against the standalone v1 baseline `073fcbb9af`. V2 reaches 2.23× the point-read rate and 1.50× the range-read rate. Higher is better.*
+
+![Standalone write throughput on Apple M3.](figs/fig-v2-eval-m3-standalone-writes.svg)
+
+*Figure E14. Write throughput from the same runs: 0.95× v1 on points and 0.92× on ranges. Higher is better.*
+
+![Standalone read, write and total times on Apple M3.](figs/fig-v2-eval-m3-standalone-times.svg)
+
+*Figure E15. Read, write and total times of the same runs, for 3,000 batches. The paired v2/v1 total-time ratio is 0.566 for points and 0.764 for ranges. Lower is better.*
+
+Runs were interleaved by round and workload, one at a time, but not pinned, and the machine was in normal use. Load before each run was not recorded. In round 1, v1's point-read rate is about 14% below rounds 2 and 3; the figures show that round as a separate dot. All runs keep `reclaimCV=0` and produce the expected decision hashes.
 
 ## Intel: skiplisttest
 
@@ -212,10 +246,12 @@ To re-extract the short-benchmark CSVs from the included raw records, use `pytho
 
 The package records a clean regeneration with Python 3.12.3 and Matplotlib 3.10.8, with `/data` hidden: all ten SVGs and ten PNGs were byte-identical to the distributed figures. That result is recorded in [REGENERATION.txt](evaluation/hp/REGENERATION.txt). Different plotting-library versions can change rendered bytes without changing the underlying values.
 
+The AMD and Apple M3 package in [`evaluation/amd-m3/`](evaluation/amd-m3/NOTE.md) contains the run CSVs, `make_figures.py`, its note and `SHA256SUMS`. `python3 make_figures.py --from-csv` redraws its five figures from the CSVs; a second run with Python 3.12.1 and Matplotlib 3.11.2 gave byte-identical files. Its raw run records are not distributed, because they also contain development candidates outside this comparison.
+
 Original records preserve their execution paths and machine-load readings. Those paths describe the measurement environment; regenerating figures from the distributed CSVs does not require that directory layout. Per-file checksums protect the supplied records, while the manifests identify the code and measurement conditions.
 
-## Remaining measurements
+## Scope of the processor comparisons
 
-The controlled AMD conflictset, skiplisttest, standalone and final-v2 retention results are not yet available here. The AMD integrated rerun is also pending. The Apple M3 campaign still needs its full source and run manifest before it can be tied to the same sequential baseline as Intel. These gaps limit the processor-level comparisons; they do not change the Intel measurements above.
+Intel has the full set of benchmarks: conflictset, skiplisttest, the integrated and standalone custom benchmarks, and the long trace. AMD has the integrated custom benchmark; Apple M3 has the standalone custom benchmark, against a different v1 baseline from Intel's. No ratio combines machines, and the AMD and M3 results do not change the Intel measurements above.
 
 V2's read improvements span several workloads, but its current write path remains individual `addWrite` calls. In skiplisttest, write time offsets the read savings against FDB; on the long trace, writes dominate total time. The [design](03-resolver-v2-design.md) explains the traversal and maintenance algorithms behind these results.
