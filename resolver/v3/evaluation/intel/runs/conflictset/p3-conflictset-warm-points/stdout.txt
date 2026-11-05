@@ -1,0 +1,27 @@
+setting workload = points
+startingConfiguration: start
+useDB: false
+Run test:UnitTests start
+setting workload = points
+setting up test (UnitTests)...
+Test received trigger for setup...
+running test (UnitTests)...
+Found 1 tests
+Testing noSim/fdbserver/conflictset/benchmark
+ConflictSetPhases index=btree-v3 workload=points seed=1 seconds=3.9323 addS=0.0876 sortS=0.4571 checkReadS=2.7796 intraBatchS=0.0072 combineS=0.0000 mergeS=0.5948 cleanupS=0.0001 otherS=0.0059
+ConflictSetBenchmark index=btree-v3 workload=points seed=1 batches=2000 warmup=1000 transactions=1000000 committed=962526 tooOld=0 decisions=41ccf929e519502f seconds=3.9323 txPerSec=254307 batchP50us=1971.7 batchP90us=2101.4 batchP99us=2366.1 batchMaxUs=2414.0 checkReadS=2.7796 intraBatchS=0.0072 combineS=0.0000 mergeS=0.5948 cleanupS=0.0001 rssBeforeMiB=64.3 rssAfterWarmupMiB=67.2 rssAfterMiB=67.2 validationMinRV=0 tooOldWithinWindow=0
+UnitTests complete
+UnitTests complete
+checking test (UnitTests)...
+fetching metrics (UnitTests)...
+Metric (0, 0): UnitTests.Test Cases Available, 1.000000, 1
+Metric (0, 1): UnitTests.Test Cases Executed, 1.000000, 1
+Metric (0, 2): UnitTests.Test Cases Failed, 0.000000, 0
+Metric (0, 3): UnitTests.Total wall clock time (s), 5.741532, 5.74
+Metric (0, 4): UnitTests.Total flow time (s), 0.000000, 0
+Test complete
+1 test clients passed; 0 test clients failed
+Run test:UnitTests Done.
+
+1 tests passed; 0 tests failed.
+

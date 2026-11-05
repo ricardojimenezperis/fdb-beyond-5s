@@ -1,0 +1,4 @@
+name=ranges-r5-v3 start=2026-11-04T21:38:10+01:00 end=2026-11-04T21:38:18+01:00 exit=0 cpu=7 sibling=15 topology=[7,7,0,0 15,7,0,0 ] docker_before=0 load_before=[0.94 2.44 7.42] dirty_kib_before=528
+cpu_busy=0.93298 sibling_busy=0.00268 hugepages=512 thp=always [madvise] never kernel=6.8.0-138-generic
+docker_env=[-e RESOLVER1_PAGE_MODE=hugetlb] docker_opts=[--privileged] hugetlb_free_before=512 hugetlb_min_free=0 hugetlb_total=512
+command=[fdbserver -r unittests -f noSim/fdbserver/conflictset/macBenchmark --test_workload=ranges --test_batches=3000 --knob_paged_resolver_pool_pages=16384 -L /out]

@@ -1,0 +1,327 @@
+{
+ "retention": {
+  "fdb265": {
+   "first_batch": 8480,
+   "first_t": 265.03125,
+   "minimum": 265.0,
+   "minimum_t": 265.03125
+  },
+  "v1": {
+   "first_batch": 22492,
+   "first_t": 702.90625,
+   "minimum": 582.9375,
+   "minimum_t": 5399.4375
+  },
+  "v26": {
+   "first_batch": 22492,
+   "first_t": 702.90625,
+   "minimum": 582.9375,
+   "minimum_t": 5399.4375
+  },
+  "v38": {
+   "first_batch": 22492,
+   "first_t": 702.90625,
+   "minimum": 582.9375,
+   "minimum_t": 5399.28125
+  }
+ },
+ "windows": {
+  "fdb265": [
+   {
+    "window": "0-600",
+    "min": 265.0,
+    "p5": 265.0,
+    "median": 265.0,
+    "peak_history_bytes": 5560493568,
+    "rejections": 0
+   },
+   {
+    "window": "600-1200",
+    "min": 265.0,
+    "p5": 265.0,
+    "median": 265.0,
+    "peak_history_bytes": 6188909696,
+    "rejections": 0
+   },
+   {
+    "window": "1200-1800",
+    "min": 265.0,
+    "p5": 265.0,
+    "median": 265.0,
+    "peak_history_bytes": 6314503904,
+    "rejections": 0
+   },
+   {
+    "window": "1800-2400",
+    "min": 265.0,
+    "p5": 265.0,
+    "median": 265.0,
+    "peak_history_bytes": 6344336960,
+    "rejections": 0
+   },
+   {
+    "window": "2400-3000",
+    "min": 265.0,
+    "p5": 265.0,
+    "median": 265.0,
+    "peak_history_bytes": 6352244288,
+    "rejections": 0
+   },
+   {
+    "window": "3000-3600",
+    "min": 265.0,
+    "p5": 265.0,
+    "median": 265.0,
+    "peak_history_bytes": 6353569792,
+    "rejections": 0
+   },
+   {
+    "window": "3600-4200",
+    "min": 265.0,
+    "p5": 265.0,
+    "median": 265.0,
+    "peak_history_bytes": 6354126592,
+    "rejections": 0
+   },
+   {
+    "window": "4200-4800",
+    "min": 265.0,
+    "p5": 265.0,
+    "median": 265.0,
+    "peak_history_bytes": 6354435200,
+    "rejections": 0
+   },
+   {
+    "window": "4800-5400",
+    "min": 265.0,
+    "p5": 265.0,
+    "median": 265.0,
+    "peak_history_bytes": 6354541376,
+    "rejections": 0
+   }
+  ],
+  "v1": [
+   {
+    "window": "0-600",
+    "min": null,
+    "p5": null,
+    "median": null,
+    "peak_history_bytes": 6442188800,
+    "rejections": 0
+   },
+   {
+    "window": "600-1200",
+    "min": 627.0,
+    "p5": 628.1875,
+    "median": 647.59375,
+    "peak_history_bytes": 6442188800,
+    "rejections": 0
+   },
+   {
+    "window": "1200-1800",
+    "min": 615.21875,
+    "p5": 615.6875,
+    "median": 620.53125,
+    "peak_history_bytes": 6442188800,
+    "rejections": 0
+   },
+   {
+    "window": "1800-2400",
+    "min": 606.6875,
+    "p5": 607.0625,
+    "median": 610.5,
+    "peak_history_bytes": 6442188800,
+    "rejections": 0
+   },
+   {
+    "window": "2400-3000",
+    "min": 600.1875,
+    "p5": 600.46875,
+    "median": 603.21875,
+    "peak_history_bytes": 6442188800,
+    "rejections": 0
+   },
+   {
+    "window": "3000-3600",
+    "min": 595.0625,
+    "p5": 595.3125,
+    "median": 597.5,
+    "peak_history_bytes": 6442188800,
+    "rejections": 0
+   },
+   {
+    "window": "3600-4200",
+    "min": 590.53125,
+    "p5": 590.75,
+    "median": 592.78125,
+    "peak_history_bytes": 6442188800,
+    "rejections": 0
+   },
+   {
+    "window": "4200-4800",
+    "min": 586.59375,
+    "p5": 586.8125,
+    "median": 588.5,
+    "peak_history_bytes": 6442188800,
+    "rejections": 0
+   },
+   {
+    "window": "4800-5400",
+    "min": 582.9375,
+    "p5": 583.125,
+    "median": 584.71875,
+    "peak_history_bytes": 6442188800,
+    "rejections": 0
+   }
+  ],
+  "v26": [
+   {
+    "window": "0-600",
+    "min": null,
+    "p5": null,
+    "median": null,
+    "peak_history_bytes": 6442188800,
+    "rejections": 0
+   },
+   {
+    "window": "600-1200",
+    "min": 627.0,
+    "p5": 628.1875,
+    "median": 647.59375,
+    "peak_history_bytes": 6442190848,
+    "rejections": 0
+   },
+   {
+    "window": "1200-1800",
+    "min": 615.21875,
+    "p5": 615.6875,
+    "median": 620.53125,
+    "peak_history_bytes": 6442190848,
+    "rejections": 0
+   },
+   {
+    "window": "1800-2400",
+    "min": 606.6875,
+    "p5": 607.0625,
+    "median": 610.5,
+    "peak_history_bytes": 6442190848,
+    "rejections": 0
+   },
+   {
+    "window": "2400-3000",
+    "min": 600.1875,
+    "p5": 600.46875,
+    "median": 603.21875,
+    "peak_history_bytes": 6442190848,
+    "rejections": 0
+   },
+   {
+    "window": "3000-3600",
+    "min": 595.0625,
+    "p5": 595.3125,
+    "median": 597.5,
+    "peak_history_bytes": 6442190848,
+    "rejections": 0
+   },
+   {
+    "window": "3600-4200",
+    "min": 590.53125,
+    "p5": 590.75,
+    "median": 592.78125,
+    "peak_history_bytes": 6442190848,
+    "rejections": 0
+   },
+   {
+    "window": "4200-4800",
+    "min": 586.59375,
+    "p5": 586.8125,
+    "median": 588.5,
+    "peak_history_bytes": 6442190848,
+    "rejections": 0
+   },
+   {
+    "window": "4800-5400",
+    "min": 582.9375,
+    "p5": 583.125,
+    "median": 584.71875,
+    "peak_history_bytes": 6442190848,
+    "rejections": 0
+   }
+  ],
+  "v38": [
+   {
+    "window": "0-600",
+    "min": null,
+    "p5": null,
+    "median": null,
+    "peak_history_bytes": 6442188800,
+    "rejections": 0
+   },
+   {
+    "window": "600-1200",
+    "min": 627.0,
+    "p5": 628.1875,
+    "median": 647.59375,
+    "peak_history_bytes": 6442188800,
+    "rejections": 0
+   },
+   {
+    "window": "1200-1800",
+    "min": 615.21875,
+    "p5": 615.6875,
+    "median": 620.53125,
+    "peak_history_bytes": 6442188800,
+    "rejections": 0
+   },
+   {
+    "window": "1800-2400",
+    "min": 606.6875,
+    "p5": 607.0625,
+    "median": 610.5,
+    "peak_history_bytes": 6442188800,
+    "rejections": 0
+   },
+   {
+    "window": "2400-3000",
+    "min": 600.1875,
+    "p5": 600.46875,
+    "median": 603.21875,
+    "peak_history_bytes": 6442188800,
+    "rejections": 0
+   },
+   {
+    "window": "3000-3600",
+    "min": 595.0625,
+    "p5": 595.3125,
+    "median": 597.5,
+    "peak_history_bytes": 6442188800,
+    "rejections": 0
+   },
+   {
+    "window": "3600-4200",
+    "min": 590.53125,
+    "p5": 590.75,
+    "median": 592.78125,
+    "peak_history_bytes": 6442188800,
+    "rejections": 0
+   },
+   {
+    "window": "4200-4800",
+    "min": 586.59375,
+    "p5": 586.78125,
+    "median": 588.5,
+    "peak_history_bytes": 6442188800,
+    "rejections": 0
+   },
+   {
+    "window": "4800-5400",
+    "min": 582.9375,
+    "p5": 583.125,
+    "median": 584.71875,
+    "peak_history_bytes": 6442188800,
+    "rejections": 0
+   }
+  ]
+ },
+ "final_slope_s_per_600s": -3.894118164052517
+}

@@ -1,0 +1,24 @@
+v3.8 group/size sweep, stage 1, blocksizebench, HugeTLB, start=2026-11-05T00:13:59+01:00
+91303beffc096ce26eb1314aa8c2de79c50251cdd707dd598b1522b836380e13  blocksizebench-2x10
+3d640f9852fa1f6b4591cd920c539c1371e5248b23fd862f3ca28966e13cb930  blocksizebench-2x12
+415091af9b29dae71aac3063ee4b4a3b025ce37680c098b0e555f1797c0c7fb7  blocksizebench-2x8
+1c5f620ad6d8cd33620dc6f6e94b537cbf0edb338e3230812da896c5c158c1c3  blocksizebench-3x12
+9c24deb7f030c10f794bced454bd0dc39ee9683420f1762e3d22f87208ef6e03  blocksizebench-3x20
+fe99d3cb5c8561b9f0890b9a7707ba5cd657dcd552e3c27717c668e72f160d1d  build.sh
+8630bb6a8bd16a2d356dd22e45de31cab92c19a63c1257d7f14da23ce561468e  correct.sh
+5c1aa25e477dcc485d26465eee38302edf7871740ed5689ef0820a9a96dabdc3  runone.sh
+1c5773c942055846ede6e4e03ed417b12f6a658d0af11d1468f74615e06134c8  stage1.sh
+7f731ce75fb73cdca8190b6d90dc6a6d83780e19b5353c1cb6a66ae4c0aa687d  prepare_memory.py
+d9f60b8e9cb6e9c2401335502c0b88736b00b0ad73f598cd33193fc204128d3c  rusage.py
+blocksizebench-gate-v38-2x8 rc=0 flags=-std=c++20 -stdlib=libc++ -DBENCH_API=3 -DBENCH_TASKS=16 -DRESOLVER1_WRITE_GROUPS=2 -DRESOLVER1_WRITE_LG=8 -falign-functions=64 -Iresolver1 -O3 -DNDEBUG
+blocksizebench-assert-v38-2x8 rc=0 flags=-std=c++20 -stdlib=libc++ -DBENCH_API=3 -DBENCH_TASKS=16 -DRESOLVER1_WRITE_GROUPS=2 -DRESOLVER1_WRITE_LG=8 -falign-functions=64 -Iresolver1 -O1 -g
+blocksizebench-gate-v38-2x10 rc=0 flags=-std=c++20 -stdlib=libc++ -DBENCH_API=3 -DBENCH_TASKS=16 -DRESOLVER1_WRITE_GROUPS=2 -DRESOLVER1_WRITE_LG=10 -falign-functions=64 -Iresolver1 -O3 -DNDEBUG
+blocksizebench-assert-v38-2x10 rc=0 flags=-std=c++20 -stdlib=libc++ -DBENCH_API=3 -DBENCH_TASKS=16 -DRESOLVER1_WRITE_GROUPS=2 -DRESOLVER1_WRITE_LG=10 -falign-functions=64 -Iresolver1 -O1 -g
+blocksizebench-gate-v38-2x12 rc=0 flags=-std=c++20 -stdlib=libc++ -DBENCH_API=3 -DBENCH_TASKS=16 -DRESOLVER1_WRITE_GROUPS=2 -DRESOLVER1_WRITE_LG=12 -falign-functions=64 -Iresolver1 -O3 -DNDEBUG
+blocksizebench-assert-v38-2x12 rc=0 flags=-std=c++20 -stdlib=libc++ -DBENCH_API=3 -DBENCH_TASKS=16 -DRESOLVER1_WRITE_GROUPS=2 -DRESOLVER1_WRITE_LG=12 -falign-functions=64 -Iresolver1 -O1 -g
+blocksizebench-gate-v38-3x12 rc=0 flags=-std=c++20 -stdlib=libc++ -DBENCH_API=3 -DBENCH_TASKS=16 -DRESOLVER1_WRITE_GROUPS=3 -DRESOLVER1_WRITE_LG=12 -falign-functions=64 -Iresolver1 -O3 -DNDEBUG
+blocksizebench-assert-v38-3x12 rc=0 flags=-std=c++20 -stdlib=libc++ -DBENCH_API=3 -DBENCH_TASKS=16 -DRESOLVER1_WRITE_GROUPS=3 -DRESOLVER1_WRITE_LG=12 -falign-functions=64 -Iresolver1 -O1 -g
+blocksizebench-gate-v38-3x20 rc=0 flags=-std=c++20 -stdlib=libc++ -DBENCH_API=3 -DBENCH_TASKS=16 -DRESOLVER1_WRITE_GROUPS=3 -DRESOLVER1_WRITE_LG=20 -falign-functions=64 -Iresolver1 -O3 -DNDEBUG
+blocksizebench-assert-v38-3x20 rc=0 flags=-std=c++20 -stdlib=libc++ -DBENCH_API=3 -DBENCH_TASKS=16 -DRESOLVER1_WRITE_GROUPS=3 -DRESOLVER1_WRITE_LG=20 -falign-functions=64 -Iresolver1 -O1 -g
+clang version 19.1.5
+kernel 6.8.0-138-generic governor powersave thp always [madvise] never

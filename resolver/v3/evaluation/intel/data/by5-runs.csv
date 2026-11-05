@@ -1,0 +1,13 @@
+arm,round,total_s,source
+v3.8,1,943.78,runs/by5/round1-v38/batch-times.csv.gz
+v3.8,2,952.39,runs/by5/round2-v38/batch-times.csv.gz
+v3.8,3,946.44,runs/by5/round3-v38/batch-times.csv.gz
+FDB,1,1240.68,analysis/analysis.txt (archived batch logs)
+FDB,2,1240.72,analysis/analysis.txt (archived batch logs)
+FDB,3,1237.19,analysis/analysis.txt (archived batch logs)
+v1,1,3379.03,analysis/analysis.txt (archived batch logs)
+v1,2,3375.50,analysis/analysis.txt (archived batch logs)
+v1,3,3352.11,analysis/analysis.txt (archived batch logs)
+v2,1,2289.52,../../v2/evaluation/hp/data/longrun-resolver-v2-time-summary.csv
+v2,2,2287.86,../../v2/evaluation/hp/data/longrun-resolver-v2-time-summary.csv
+v2,3,2294.52,../../v2/evaluation/hp/data/longrun-resolver-v2-time-summary.csv

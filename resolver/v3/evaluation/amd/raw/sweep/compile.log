@@ -1,0 +1,11 @@
+blocksizebench-gate-v38-2x8 rc=0 flags=-std=c++20 -stdlib=libc++ -DBENCH_API=3 -DBENCH_TASKS=16 -DRESOLVER1_WRITE_GROUPS=2 -DRESOLVER1_WRITE_LG=8 -falign-functions=64 -Iresolver1 -O3 -DNDEBUG
+blocksizebench-assert-v38-2x8 rc=0 flags=-std=c++20 -stdlib=libc++ -DBENCH_API=3 -DBENCH_TASKS=16 -DRESOLVER1_WRITE_GROUPS=2 -DRESOLVER1_WRITE_LG=8 -falign-functions=64 -Iresolver1 -O1 -g
+blocksizebench-gate-v38-2x10 rc=0 flags=-std=c++20 -stdlib=libc++ -DBENCH_API=3 -DBENCH_TASKS=16 -DRESOLVER1_WRITE_GROUPS=2 -DRESOLVER1_WRITE_LG=10 -falign-functions=64 -Iresolver1 -O3 -DNDEBUG
+blocksizebench-assert-v38-2x10 rc=0 flags=-std=c++20 -stdlib=libc++ -DBENCH_API=3 -DBENCH_TASKS=16 -DRESOLVER1_WRITE_GROUPS=2 -DRESOLVER1_WRITE_LG=10 -falign-functions=64 -Iresolver1 -O1 -g
+blocksizebench-gate-v38-2x12 rc=0 flags=-std=c++20 -stdlib=libc++ -DBENCH_API=3 -DBENCH_TASKS=16 -DRESOLVER1_WRITE_GROUPS=2 -DRESOLVER1_WRITE_LG=12 -falign-functions=64 -Iresolver1 -O3 -DNDEBUG
+blocksizebench-assert-v38-2x12 rc=0 flags=-std=c++20 -stdlib=libc++ -DBENCH_API=3 -DBENCH_TASKS=16 -DRESOLVER1_WRITE_GROUPS=2 -DRESOLVER1_WRITE_LG=12 -falign-functions=64 -Iresolver1 -O1 -g
+blocksizebench-gate-v38-3x12 rc=0 flags=-std=c++20 -stdlib=libc++ -DBENCH_API=3 -DBENCH_TASKS=16 -DRESOLVER1_WRITE_GROUPS=3 -DRESOLVER1_WRITE_LG=12 -falign-functions=64 -Iresolver1 -O3 -DNDEBUG
+blocksizebench-assert-v38-3x12 rc=0 flags=-std=c++20 -stdlib=libc++ -DBENCH_API=3 -DBENCH_TASKS=16 -DRESOLVER1_WRITE_GROUPS=3 -DRESOLVER1_WRITE_LG=12 -falign-functions=64 -Iresolver1 -O1 -g
+blocksizebench-gate-v38-3x20 rc=0 flags=-std=c++20 -stdlib=libc++ -DBENCH_API=3 -DBENCH_TASKS=16 -DRESOLVER1_WRITE_GROUPS=3 -DRESOLVER1_WRITE_LG=20 -falign-functions=64 -Iresolver1 -O3 -DNDEBUG
+blocksizebench-assert-v38-3x20 rc=0 flags=-std=c++20 -stdlib=libc++ -DBENCH_API=3 -DBENCH_TASKS=16 -DRESOLVER1_WRITE_GROUPS=3 -DRESOLVER1_WRITE_LG=20 -falign-functions=64 -Iresolver1 -O1 -g
+clang version 19.1.5

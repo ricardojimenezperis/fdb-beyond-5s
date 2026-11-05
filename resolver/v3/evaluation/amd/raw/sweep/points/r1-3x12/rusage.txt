@@ -1,0 +1,1 @@
+exit=0 wall_s=10.984 maxrss_kib=694204 utime_s=10.603 stime_s=0.379 minflt=276071 majflt=1 nvcsw=1 nivcsw=52

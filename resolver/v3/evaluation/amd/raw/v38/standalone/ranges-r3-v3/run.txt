@@ -1,0 +1,4 @@
+name=ranges-r3-v3 start=2026-11-04T21:39:53+01:00 end=2026-11-04T21:40:01+01:00 exit=0 cpu=7 sibling=15 topology=[7,7,0,0 15,7,0,0 ] docker_before=0 load_before=[1.15 2.08 6.78] dirty_kib_before=36
+cpu_busy=0.92954 sibling_busy=0.00247 hugepages=512 thp=always [madvise] never kernel=6.8.0-138-generic
+docker_env=[-e RESOLVER1_PAGE_MODE=hugetlb] docker_opts=[--privileged] hugetlb_free_before=512 hugetlb_min_free=0 hugetlb_total=512
+command=[blocksizebench ranges 3000 1024]

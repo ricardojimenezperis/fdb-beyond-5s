@@ -1,0 +1,14 @@
+2026-11-05T00:09:29+01:00 check 2x8 points backing=True conflicts=29209 reclaimCV=0 decisions=4787dbf4af9b9ca8 
+2026-11-05T00:09:36+01:00 check 2x8 ranges backing=True conflicts=3479753 reclaimCV=0 decisions=df42a6e5c89796ea 
+2026-11-05T00:09:46+01:00 check 2x10 points backing=True conflicts=29209 reclaimCV=0 decisions=4787dbf4af9b9ca8 
+2026-11-05T00:09:53+01:00 check 2x10 ranges backing=True conflicts=3479753 reclaimCV=0 decisions=df42a6e5c89796ea 
+2026-11-05T00:10:03+01:00 check 2x12 points backing=True conflicts=29209 reclaimCV=0 decisions=4787dbf4af9b9ca8 
+2026-11-05T00:10:10+01:00 check 2x12 ranges backing=True conflicts=3479753 reclaimCV=0 decisions=df42a6e5c89796ea 
+2026-11-05T00:10:20+01:00 check 3x12 points backing=True conflicts=29209 reclaimCV=0 decisions=4787dbf4af9b9ca8 
+2026-11-05T00:10:27+01:00 check 3x12 ranges backing=True conflicts=3479753 reclaimCV=0 decisions=df42a6e5c89796ea 
+2026-11-05T00:10:37+01:00 check 3x20 points backing=True conflicts=29209 reclaimCV=0 decisions=4787dbf4af9b9ca8 
+2026-11-05T00:10:45+01:00 check 3x20 ranges backing=True conflicts=3479753 reclaimCV=0 decisions=df42a6e5c89796ea 
+2026-11-05T00:13:36+01:00 round 1 [2x8 2x10 2x12 3x12 3x20] done
+2026-11-05T00:15:01+01:00 round 2 [3x12 3x20 2x8 2x10 2x12] done
+2026-11-05T00:16:26+01:00 round 3 [2x10 2x12 3x12 3x20 2x8] done
+2026-11-05T00:16:26+01:00 stage1 done

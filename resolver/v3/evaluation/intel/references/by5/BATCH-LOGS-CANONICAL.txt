@@ -1,0 +1,15 @@
+0e7040580aeaf5aea8cadc3862114e512dd6e1f0768a9dcf55f4513bb3172861 49767355 scratch/btprof/campaigns/2026-10-23-equal-memory-hp/runs/round1-fdb265/batches.csv
+cfa0357c71488e1c14fe10ce76b9de29bd7b5319e2368d1c5a2e1f077e343cd6 49772905 scratch/btprof/campaigns/2026-10-23-equal-memory-hp/runs/round2-fdb265/batches.csv
+dea5b148726633f2c916e5e879575e6b6f2bbf311eecd9b236e5c0ba63ef1a4f 49768540 scratch/btprof/campaigns/2026-10-23-equal-memory-hp/runs/round3-fdb265/batches.csv
+fcdd142cf2584585c633cbc64228d06aa9fda110ffcc0415a2af8b11aaf5656a 47820337 scratch/btprof/campaigns/2026-10-23-equal-memory-hp/runs/round1-v1/batches.csv
+167de3e082eb8950521f8e8a3f8447758fc0e5eb044b07dd55a67586c531ac29 47678373 scratch/btprof/campaigns/2026-10-23-equal-memory-hp/runs/round2-v1/batches.csv
+19416f1c00a791f729bf80a4036f69cdffa1c7047eb1eb7a2806fa1a9338220b 47620509 scratch/btprof/campaigns/2026-10-23-equal-memory-hp/runs/round3-v1/batches.csv
+a304b487146e51f3097e94593d14703443b9603e71472e88355a367a9e247c01 47302426 scratch/btprof/campaigns/2026-10-23-equal-memory-hp/runs/acct-v1/batches.csv
+88e7e7f83991fc2e59521e64e0e105886848d436fbe3b6ab38f2556ab7ddc27a 27304432 scratch/btprof/campaigns/2026-10-23-equal-memory-hp/runs/acct-v1/batches.csv.acct.csv
+9f02c0275305ff36b1f46d7c22a589841bb9c511f4ef76a97da1308413aa65ab 46777758 scratch/btprof/campaigns/2026-10-30-equal-memory-v26-hp/runs/round1-v26/batches.csv
+0c139ae729f0adedcc72d51b3ffec35a45d65746d4f854faa1033e1ddffb28b7 46735736 scratch/btprof/campaigns/2026-10-30-equal-memory-v26-hp/runs/round2-v26/batches.csv
+e83e6a6dc0914e977ee9f2b6dfe6d458dc23d38dcaf0425fbc77d6a83c10c1f7 46577569 scratch/btprof/campaigns/2026-10-30-equal-memory-v26-hp/runs/round3-v26/batches.csv
+f73298e9b24410d68eb9a661f38e87f5883496eb019dea04b9f8c82f2724a5e8 46608179 scratch/btprof/campaigns/2026-10-30-equal-memory-v26-hp/runs/acct-v26/batches.csv
+482ffd8062c708ba246298b133774545affa7e6e16c84ac109a0ca9a6f792373 27755353 scratch/btprof/campaigns/2026-10-30-equal-memory-v26-hp/runs/acct-v26/batches.csv.acct.csv
+b0d526e14d80dff850c13e956f6e226e9217c986515fae6bcc0a20973e54bba3 49737868 scratch/btprof/campaigns/2026-10-11-fdb-v6-long-retention-hp/wave1/fdb-w265/batches.csv
+bbfcf1c50ba2925671377c86ed59224aba7a18c34a3fe5e61a5d096e7dc27ee2 30290177 scratch/btprof/campaigns/2026-10-11-fdb-v6-long-retention-hp/wave1/fdb-w265/batches.csv.acct.csv

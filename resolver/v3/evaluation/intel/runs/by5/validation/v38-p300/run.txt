@@ -1,0 +1,2 @@
+$BIN/v38-nativemem/fdbserver arm=v38 mode=native cpu=9 sha=9102c0fd6176ecb9d76b826904d2b16ba7158f3fb19d5154b7cbd2eb5034f765 kernel=7.0.0-42-generic hugepages=8200 load=1.09 1.44 3.03 start=2026-11-04T21:40:07+01:00 knobs=[--knob_paged_resolver_pool_pages=300] env=[-e BY5_SEGMENT_START=57600 -e BY5_SEGMENT_BATCHES=6400 -e BY5_PREHISTORY_BATCHES=57600 -e BY5_PRIME=0 -e BY5_FICT_MODEL=0 -e BY5_VALIDATE=1 -e BY5_PROCESS_SEED=1 -e BY5_FICT_SEED=1 -e BY5_FICT_LEAF=0]
+end=2026-11-04T21:41:16+01:00 exit=0

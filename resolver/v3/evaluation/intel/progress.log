@@ -1,0 +1,37 @@
+2026-11-04T21:19:04+01:00 backing mac-standalone points True decisions=4787dbf4af9b9ca8
+2026-11-04T21:19:10+01:00 backing conflictset points True committed=962526 decisions=41ccf929e519502f 
+2026-11-04T21:19:20+01:00 backing macbench points True decisions=4787dbf4af9b9ca8 
+2026-11-04T21:19:28+01:00 backing mac-standalone ranges True decisions=df42a6e5c89796ea
+2026-11-04T21:19:32+01:00 backing conflictset ranges  committed=164926 decisions=224f4d48ebf2cb5d 
+2026-11-04T21:19:40+01:00 backing macbench ranges True decisions=df42a6e5c89796ea 
+2026-11-04T21:20:47+01:00 mac standalone done
+2026-11-04T21:21:28+01:00 conflictset done
+2026-11-04T21:22:40+01:00 macbench done
+2026-11-04T21:22:40+01:00 short done
+2026-11-04T21:23:19+01:00 backing conflictset ranges (recheck) True
+2026-11-04T21:26:41+01:00 backing skiplisttest head16 True decisionsHash=30afc613d78499ea
+2026-11-04T21:28:08+01:00 skiplisttest head16 done
+2026-11-04T21:29:29+01:00 skiplisttest head32 done
+2026-11-04T21:31:02+01:00 skiplisttest tail32 done
+2026-11-04T21:32:29+01:00 skiplisttest head64 done
+2026-11-04T21:34:40+01:00 skiplisttest tail64 done
+2026-11-04T21:36:18+01:00 skiplisttest head128 done
+2026-11-04T21:40:07+01:00 skiplisttest tail128 done
+2026-11-04T21:40:07+01:00 skiplisttest all done
+2026-11-04T21:41:41+01:00 by5 validation done
+drain 2026-11-04T21:41:41+01:00 dirty+writeback_kib=244
+2026-11-04T21:41:41+01:00 by5 acct start
+2026-11-04T21:59:32+01:00 by5 acct end end=2026-11-04T21:59:32+01:00 exit=0
+drain 2026-11-04T21:59:32+01:00 dirty+writeback_kib=464
+2026-11-04T21:59:32+01:00 by5 round1 start
+2026-11-04T22:17:12+01:00 by5 round1 end end=2026-11-04T22:17:12+01:00 exit=0
+drain 2026-11-04T22:17:12+01:00 dirty+writeback_kib=4
+2026-11-04T22:17:12+01:00 by5 round2 start
+2026-11-04T22:35:02+01:00 by5 round2 end end=2026-11-04T22:35:02+01:00 exit=0
+drain 2026-11-04T22:35:02+01:00 dirty+writeback_kib=436
+2026-11-04T22:35:02+01:00 by5 round3 start
+2026-11-04T22:52:45+01:00 by5 round3 end end=2026-11-04T22:52:45+01:00 exit=0
+2026-11-04T22:52:45+01:00 long done
+2026-11-04T22:52:45+01:00 all long done hugepages=HugePages_Total: 8200 HugePages_Free: 8200 
+2026-11-04T22:54:58+01:00 head16 runs moved to excluded: concurrent recursive grep by the analysis session at 21:27-21:28 (involuntary context switches 112k-145k, load 5.5)
+2026-11-04T22:56:28+01:00 skiplisttest head16 rerun done

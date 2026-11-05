@@ -1,0 +1,74 @@
+{
+  "timestamp_utc": "2026-11-04T23:09:48.478190+00:00",
+  "pid": 109380,
+  "requested_mode": "hugetlb",
+  "pool": {
+    "virtual_bytes": 1073741824,
+    "rss_bytes_excluding_hugetlb": 0,
+    "anon_thp_bytes": 0,
+    "hugetlb_bytes": 1073741824,
+    "resident_bytes_including_hugetlb": 1073741824,
+    "rss_without_anon_thp_bytes": 0,
+    "normal_resident_bytes": 0,
+    "normal_base_page_equivalents": 0.0,
+    "hugetlb_2MiB_pages": 512,
+    "thp_2MiB_equivalents": 0.0,
+    "huge_coverage_fraction": 1.0,
+    "nonresident_bytes": 0
+  },
+  "pool_mapping": {
+    "start": 127356377235456,
+    "end": 127357450977280,
+    "perms": "rw-p",
+    "header": "73d477a00000-73d4b7a00000 rw-p 00000000 00:12 322224                     /anon_hugepage (deleted)",
+    "fields": {
+      "Size": 1073741824,
+      "KernelPageSize": 2097152,
+      "MMUPageSize": 2097152,
+      "Rss": 0,
+      "Pss": 0,
+      "Pss_Dirty": 0,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0,
+      "Private_Clean": 0,
+      "Private_Dirty": 0,
+      "Referenced": 0,
+      "Anonymous": 0,
+      "KSM": 0,
+      "LazyFree": 0,
+      "AnonHugePages": 0,
+      "ShmemPmdMapped": 0,
+      "FilePmdMapped": 0,
+      "Shared_Hugetlb": 0,
+      "Private_Hugetlb": 1073741824,
+      "Swap": 0,
+      "SwapPss": 0,
+      "Locked": 0
+    },
+    "flags": [
+      "rd",
+      "wr",
+      "mr",
+      "mw",
+      "me",
+      "de",
+      "ht",
+      "sd"
+    ]
+  },
+  "process": {
+    "virtual_bytes": 1847685120,
+    "rss_bytes_excluding_hugetlb": 593842176,
+    "anon_thp_bytes": 0,
+    "hugetlb_bytes": 1073741824,
+    "resident_bytes_including_hugetlb": 1667584000,
+    "rss_without_anon_thp_bytes": 593842176
+  },
+  "notes": [
+    "Pool normal resident bytes exclude both anonymous THP and HugeTLB.",
+    "Process rss_without_anon_thp_bytes can include file mappings; it is not a 4 KiB page count.",
+    "THP page count is expressed as 2 MiB equivalents, not a measured folio count."
+  ],
+  "process_start_ticks": "8225257",
+  "coverage_check_passed": true
+}

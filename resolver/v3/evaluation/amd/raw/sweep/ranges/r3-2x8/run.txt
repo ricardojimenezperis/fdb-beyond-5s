@@ -1,0 +1,4 @@
+name=r3-2x8 start=2026-11-05T00:19:55+01:00 end=2026-11-05T00:20:03+01:00 exit=0 cpu=7 sibling=15 topology=[7,7,0,0 15,7,0,0 ] docker_before=0 load_before=[1.45 1.06 0.58] dirty_kib_before=8
+cpu_busy=0.94663 sibling_busy=0.00127 hugepages=512 thp=always [madvise] never kernel=6.8.0-138-generic
+docker_env=[-e RESOLVER1_PAGE_MODE=hugetlb] docker_opts=[--privileged] hugetlb_free_before=512 hugetlb_min_free=0 hugetlb_total=512
+command=[blocksizebench-2x8 ranges 3000 1024]

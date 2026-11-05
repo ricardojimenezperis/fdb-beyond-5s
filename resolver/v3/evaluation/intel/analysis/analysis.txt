@@ -1,0 +1,52 @@
+== Same segment, load and memory contract
+  fdb265: 172800 batches, first cv 31250, last cv 5400000000, hashes {'offeredHash': '11334b1aea22e641', 'decisionsHash': '5001114085b550fb'}
+      run: $BTPROF/ieh/hp/by5/bin/Xfl6/fdbserver fdb:265000000 $BTPROF/traces7200-copy/pilot-2000M-l0-7200.trace cpu=5 validate=0 sha=d519f029c09ff637 start=2026-10-10T19:31:52+02:00
+  v1: 172800 batches, first cv 31250, last cv 5400000000, hashes {'offeredHash': '11334b1aea22e641', 'decisionsHash': '5001114085b550fb'}
+      run: $CAMPAIGNS/2026-10-23-equal-memory-hp/bin/v1-acct/fdbserver arm=v1 mode=acct cpu=10 sha=6ca0adcd6ff2ab530565187d5007689a4ad4d2fea5440f85e6f12f389c490c2b kernel=7.0.0-38-generic hugepages=3300 load=1.88 2.77 1.51 start=2026-10-23T11:58:53+02:00 knobs=[--knob_resolver_use_paged_conflict_set=0 --knob_paged_resolver_pool_pages=98300] env=[-e BY5_SEGMENT_START=57600 -e BY5_SEGME
+  v26: 172800 batches, first cv 31250, last cv 5400000000, hashes {'offeredHash': '11334b1aea22e641', 'decisionsHash': '5001114085b550fb'}
+      run: $CAMPAIGNS/2026-10-30-equal-memory-v26-hp/bin/v26-acct/fdbserver arm=v2 mode=acct cpu=6 sha=8961252e4132778ad04b23b76292af5eaa0c9a934970ae58420ad1418e4ddc5f kernel=7.0.0-38-generic hugepages=0 load=2.22 1.36 0.58 start=2026-10-30T00:21:50+01:00 knobs=[--knob_resolver_use_paged_conflict_set=0 --knob_paged_resolver_pool_pages=98300] env=[-e BY5_SEGMENT_START=57600 -e BY5_SEGM
+  v38: 172800 batches, first cv 31250, last cv 5400000000, hashes {'offeredHash': '11334b1aea22e641', 'decisionsHash': '5001114085b550fb'}
+      run: $BIN/v38-acct/fdbserver arm=v38 mode=acct cpu=6 sha=5488fad9a292efa65cd4aa6fd1f7674290c447383ad53a0cebb9c7262a57d930 kernel=7.0.0-42-generic hugepages=8200 load=2.27 1.79 3.00 start=2026-11-04T21:41:41+01:00 knobs=[--knob_paged_resolver_pool_pages=98300] env=[-e BY5_SEGMENT_START=57600 -e BY5_SEGMENT_BATCHES=172800 -e BY5_PREHISTORY_BATCHES=5760
+  same offered hash: True; same batch cv sequence: True
+
+== Rejections and their legitimacy
+  fdb265: rejected for window 0, for memory 0
+  v1: rejected for window 0, for memory 0
+  v26: rejected for window 0, for memory 0
+  v38: rejected for window 0, for memory 0
+  v26 memory rejections in batches whose boundary (capacity_floor_before) is 0: 0 (the harness rejects for memory only reads below the tree boundary at the start of the batch)
+  first batch where v38 differs from v1: {'accepted': None, 'conflicts': None, 'rejected_memory': None}
+
+== Retention
+  fdb265: first discard batch 8480 (t 265.03 s); minimum after it 265.000 s at t 265.0 s
+  v1: first discard batch 22492 (t 702.91 s); minimum after it 582.938 s at t 5399.4 s
+  v26: first discard batch 22492 (t 702.91 s); minimum after it 582.938 s at t 5399.4 s
+  v38: first discard batch 22492 (t 702.91 s); minimum after it 582.938 s at t 5399.3 s
+
+== 600 s windows: retention min / p5 / median (s), peak history_bytes, rejections (window+memory)
+
+== Final slope of v38 retention (per 600 s)
+  per-window minimum: 627.00 615.22 606.69 600.19 595.06 590.53 586.59 582.94
+  change of the window minimum over the last three windows: -4.53 -3.94 -3.66
+  change of the window median over the last three windows: -4.72 -4.28 -3.78
+  least-squares slope of retention over the last 1,500 s of the run (one point per second): -3.894 s per 600 s
+
+== Native time (orientative against the archived rounds of 2026-10-23; different session)
+  -- initial
+    fdb265 total median     74.79 s (min 74.32, max 74.86) rounds 74.86 74.79 74.32, write 33.99, read 22.93  [2026-10-23]
+    v1     total median    165.57 s (min 164.91, max 165.90) rounds 165.57 164.91 165.90, write 77.12, read 80.49  [2026-10-23]
+    v2     total median    113.56 s (min 112.36, max 113.73) rounds 113.56 113.73 112.36, write 85.46, read 20.27  [2026-10-23]
+    v26    total median    110.61 s (min 110.15, max 110.66) rounds 110.66 110.15 110.61, write 78.50, read 24.17  [2026-10-30]
+    v38    total median     56.09 s (min 55.13, max 56.66) rounds 55.13 56.66 56.09, write 12.57, read 36.06  [2026-11-04]
+  -- late
+    fdb265 total median    707.35 s (min 706.38, max 707.84) rounds 707.84 707.35 706.38, write 343.44, read 178.97  [2026-10-23]
+    v1     total median   1939.00 s (min 1912.71, max 1941.40) rounds 1941.40 1939.00 1912.71, write 938.04, read 940.60  [2026-10-23]
+    v2     total median   1372.96 s (min 1354.87, max 1382.24) rounds 1382.24 1372.96 1354.87, write 1036.26, read 277.43  [2026-10-23]
+    v26    total median   1316.60 s (min 1315.80, max 1319.59) rounds 1316.60 1315.80 1319.59, write 955.57, read 303.21  [2026-10-30]
+    v38    total median    536.97 s (min 536.64, max 538.45) rounds 538.45 536.97 536.64, write 145.09, read 336.42  [2026-11-04]
+  -- whole
+    fdb265 total median   1240.68 s (min 1237.19, max 1240.72) rounds 1240.68 1240.72 1237.19, write 599.46, read 320.53  [2026-10-23]
+    v1     total median   3375.50 s (min 3352.11, max 3379.03) rounds 3379.03 3375.50 3352.11, write 1628.10, read 1639.17  [2026-10-23]
+    v2     total median   2382.45 s (min 2352.70, max 2400.93) rounds 2400.93 2382.45 2352.70, write 1799.32, read 476.69  [2026-10-23]
+    v26    total median   2289.52 s (min 2287.86, max 2294.52) rounds 2289.52 2287.86 2294.52, write 1659.74, read 525.82  [2026-10-30]
+    v38    total median    946.44 s (min 943.78, max 952.39) rounds 943.78 952.39 946.44, write 251.56, read 594.76  [2026-11-04]

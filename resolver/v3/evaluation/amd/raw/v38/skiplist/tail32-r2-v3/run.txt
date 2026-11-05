@@ -1,0 +1,4 @@
+name=tail32-r2-v3 start=2026-11-04T21:43:52+01:00 end=2026-11-04T21:44:15+01:00 exit=0 cpu=7 sibling=15 topology=[7,7,0,0 15,7,0,0 ] docker_before=0 load_before=[1.00 1.49 5.46] dirty_kib_before=0
+cpu_busy=0.97921 sibling_busy=0.00000 hugepages=8192 thp=always [madvise] never kernel=6.8.0-138-generic
+docker_env=[-e RESOLVER1_PAGE_MODE=hugetlb -e SKIPLISTTEST_CPU=7 -e SKIPLISTTEST_KEY_BYTES=32 -e SKIPLISTTEST_KEY_LAYOUT=tail -e SKIPLISTTEST_PER_BATCH=40000 -e SKIPLISTTEST_RANGE_SPAN=10] docker_opts=[--privileged] hugetlb_free_before=8192 hugetlb_min_free=0 hugetlb_total=8192
+command=[fdbserver -r skiplisttest -C $MEASUREMENT/fdb.cluster -s 1 --knob_paged_resolver_pool_pages=262144]

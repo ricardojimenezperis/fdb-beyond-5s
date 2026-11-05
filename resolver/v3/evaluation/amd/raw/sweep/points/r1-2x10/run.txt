@@ -1,0 +1,4 @@
+name=r1-2x10 start=2026-11-05T00:15:11+01:00 end=2026-11-05T00:15:22+01:00 exit=0 cpu=7 sibling=15 topology=[7,7,0,0 15,7,0,0 ] docker_before=0 load_before=[0.91 0.67 0.32] dirty_kib_before=60
+cpu_busy=0.95822 sibling_busy=0.00261 hugepages=512 thp=always [madvise] never kernel=6.8.0-138-generic
+docker_env=[-e RESOLVER1_PAGE_MODE=hugetlb] docker_opts=[--privileged] hugetlb_free_before=512 hugetlb_min_free=0 hugetlb_total=512
+command=[blocksizebench-2x10 points 3000 1024]

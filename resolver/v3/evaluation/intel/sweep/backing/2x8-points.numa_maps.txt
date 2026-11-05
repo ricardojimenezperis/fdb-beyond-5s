@@ -1,0 +1,50 @@
+00400000 default file=$BIN/bsb-2x8 mapped=2 active=0 N0=2 kernelpagesize_kB=4
+00402000 default file=$BIN/bsb-2x8 mapped=27 active=0 N0=27 kernelpagesize_kB=4
+0041d000 default file=$BIN/bsb-2x8 mapped=4 active=0 N0=4 kernelpagesize_kB=4
+00421000 default file=$BIN/bsb-2x8 anon=1 dirty=1 active=0 N0=1 kernelpagesize_kB=4
+00422000 default file=$BIN/bsb-2x8 anon=1 dirty=1 active=0 N0=1 kernelpagesize_kB=4
+2ad18000 default heap anon=56450 dirty=56450 active=21 N0=56450 kernelpagesize_kB=4
+7f010b200000 default file=/anon_hugepage\040(deleted) huge anon=512 dirty=512 N0=512 kernelpagesize_kB=2048
+7f014b275000 default anon=87890 dirty=87890 active=0 N0=87890 kernelpagesize_kB=4
+7f018b200000 default file=/usr/lib/x86_64-linux-gnu/libc.so.6 mapped=39 mapmax=128 active=0 N0=39 kernelpagesize_kB=4
+7f018b228000 default file=/usr/lib/x86_64-linux-gnu/libc.so.6 mapped=215 mapmax=133 active=0 N0=215 kernelpagesize_kB=4
+7f018b3b1000 default file=/usr/lib/x86_64-linux-gnu/libc.so.6 mapped=16 mapmax=132 active=0 N0=16 kernelpagesize_kB=4
+7f018b400000 default file=/usr/lib/x86_64-linux-gnu/libc.so.6 anon=4 dirty=4 active=0 N0=4 kernelpagesize_kB=4
+7f018b404000 default file=/usr/lib/x86_64-linux-gnu/libc.so.6 anon=2 dirty=2 active=0 N0=2 kernelpagesize_kB=4
+7f018b406000 default anon=5 dirty=5 active=0 N0=5 kernelpagesize_kB=4
+7f018b467000 default anon=63 dirty=63 active=0 N0=63 kernelpagesize_kB=4
+7f018b4a7000 default file=/usr/lib/x86_64-linux-gnu/libgcc_s.so.1 mapped=4 mapmax=38 active=0 N0=4 kernelpagesize_kB=4
+7f018b4ab000 default file=/usr/lib/x86_64-linux-gnu/libgcc_s.so.1 mapped=16 mapmax=36 active=0 N0=16 kernelpagesize_kB=4
+7f018b4cf000 default file=/usr/lib/x86_64-linux-gnu/libgcc_s.so.1 mapped=4 mapmax=35 active=0 N0=4 kernelpagesize_kB=4
+7f018b4d3000 default file=/usr/lib/x86_64-linux-gnu/libgcc_s.so.1 anon=1 dirty=1 active=0 N0=1 kernelpagesize_kB=4
+7f018b4d4000 default file=/usr/lib/x86_64-linux-gnu/libgcc_s.so.1 anon=1 dirty=1 active=0 N0=1 kernelpagesize_kB=4
+7f018b4d5000 default file=/usr/lib/x86_64-linux-gnu/libm.so.6 mapped=15 mapmax=115 active=0 N0=15 kernelpagesize_kB=4
+7f018b4e5000 default file=/usr/lib/x86_64-linux-gnu/libm.so.6 mapped=59 mapmax=115 active=0 N0=59 kernelpagesize_kB=4
+7f018b564000 default file=/usr/lib/x86_64-linux-gnu/libm.so.6
+7f018b5bc000 default file=/usr/lib/x86_64-linux-gnu/libm.so.6 anon=1 dirty=1 active=0 N0=1 kernelpagesize_kB=4
+7f018b5bd000 default file=/usr/lib/x86_64-linux-gnu/libm.so.6 anon=1 dirty=1 active=0 N0=1 kernelpagesize_kB=4
+7f018b5d0000 default file=$CAMPAIGNS/2026-11-02-v31-profile-hp/lib/libunwind.so.1 mapped=2 active=0 N0=2 kernelpagesize_kB=4
+7f018b5d2000 default file=$CAMPAIGNS/2026-11-02-v31-profile-hp/lib/libunwind.so.1 mapped=7 active=0 N0=7 kernelpagesize_kB=4
+7f018b5d9000 default file=$CAMPAIGNS/2026-11-02-v31-profile-hp/lib/libunwind.so.1
+7f018b5dd000 default file=$CAMPAIGNS/2026-11-02-v31-profile-hp/lib/libunwind.so.1 anon=1 dirty=1 active=0 N0=1 kernelpagesize_kB=4
+7f018b5de000 default file=$CAMPAIGNS/2026-11-02-v31-profile-hp/lib/libunwind.so.1 anon=1 dirty=1 active=0 N0=1 kernelpagesize_kB=4
+7f018b5df000 default file=$CAMPAIGNS/2026-11-02-v31-profile-hp/lib/libc++abi.so.1 mapped=16 active=0 N0=16 kernelpagesize_kB=4
+7f018b5ef000 default file=$CAMPAIGNS/2026-11-02-v31-profile-hp/lib/libc++abi.so.1 mapped=19 active=0 N0=19 kernelpagesize_kB=4
+7f018b613000 default file=$CAMPAIGNS/2026-11-02-v31-profile-hp/lib/libc++abi.so.1
+7f018b61f000 default file=$CAMPAIGNS/2026-11-02-v31-profile-hp/lib/libc++abi.so.1 anon=4 dirty=4 active=0 N0=4 kernelpagesize_kB=4
+7f018b623000 default file=$CAMPAIGNS/2026-11-02-v31-profile-hp/lib/libc++abi.so.1 anon=1 dirty=1 active=0 N0=1 kernelpagesize_kB=4
+7f018b624000 default file=$CAMPAIGNS/2026-11-02-v31-profile-hp/lib/libc++.so.1 mapped=60 active=0 N0=60 kernelpagesize_kB=4
+7f018b660000 default file=$CAMPAIGNS/2026-11-02-v31-profile-hp/lib/libc++.so.1 mapped=112 active=0 N0=112 kernelpagesize_kB=4
+7f018b6d3000 default file=$CAMPAIGNS/2026-11-02-v31-profile-hp/lib/libc++.so.1 mapped=32 active=0 N0=32 kernelpagesize_kB=4
+7f018b712000 default file=$CAMPAIGNS/2026-11-02-v31-profile-hp/lib/libc++.so.1 anon=6 dirty=6 active=0 N0=6 kernelpagesize_kB=4
+7f018b718000 default file=$CAMPAIGNS/2026-11-02-v31-profile-hp/lib/libc++.so.1 anon=1 dirty=1 active=0 N0=1 kernelpagesize_kB=4
+7f018b719000 default anon=4 dirty=4 active=0 N0=4 kernelpagesize_kB=4
+7f018b722000 default
+7f018b726000 default
+7f018b728000 default
+7f018b72a000 default file=/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 mapped=1 mapmax=127 active=0 N0=1 kernelpagesize_kB=4
+7f018b72b000 default file=/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 mapped=43 mapmax=129 active=0 N0=43 kernelpagesize_kB=4
+7f018b756000 default file=/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 mapped=10 mapmax=128 active=0 N0=10 kernelpagesize_kB=4
+7f018b760000 default file=/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 anon=2 dirty=2 active=0 N0=2 kernelpagesize_kB=4
+7f018b762000 default file=/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 anon=2 dirty=2 active=0 N0=2 kernelpagesize_kB=4
+7ffdfa37e000 default stack anon=3 dirty=3 active=0 N0=3 kernelpagesize_kB=4

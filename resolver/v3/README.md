@@ -20,6 +20,7 @@ Resolver v3.8 routes read and write begins together through the temporal conflic
 | How do routing, tasks and safety work? | [Detailed design](03-resolver-v3-design.md) |
 | Why v3.8 and what happened to later experiments? | [Decisions and evolution](04-decisions-and-evolution.md) |
 | Which sources and checks support this snapshot? | [Validation and evidence](05-validation-and-evidence.md) |
+| How does v3.8 compare with FDB, v1 and v2? | [Evaluation](06-evaluation.md) |
 
 The [v2 snapshot](../v2/README.md) remains immutable. The [current Resolver design](../../design/02-resolver.md) points to the chosen v3 implementation. This snapshot is source-specific: performance numbers that used a phase-gated benchmark, a walkers patch or special alignment must state those build conditions explicitly.
 

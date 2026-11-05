@@ -1,0 +1,21 @@
+phase	case	candidate	index	transactions	reads	writes	tooOld	tooOldByBoundary	boundaryEnd	mismatches	firstMismatchBatch	seconds
+room	scattered-points	fdb	skiplist	30000	44934	29985	3699	0	0	-	-	0.029
+room	short-overlapping-ranges	fdb	skiplist	30000	30068	30041	3363	0	0	-	-	0.020
+room	long-ranges	fdb	skiplist	30000	20000	30079	3226	0	0	-	-	0.017
+room	write-inside-range	fdb	skiplist	30000	89550	30000	4899	0	0	-	-	0.024
+room	growth	fdb	skiplist	20000	20000	60000	3344	0	0	-	-	0.031
+room	erasures	fdb	skiplist	30000	14250	30750	2314	0	0	-	-	0.019
+room	scattered-points	btree-v3	btree-v3	30000	44934	29985	3699	0	0	0	-1	0.035
+room	short-overlapping-ranges	btree-v3	btree-v3	30000	30068	30041	3363	0	0	0	-1	0.022
+room	long-ranges	btree-v3	btree-v3	30000	20000	30079	3226	0	0	0	-1	0.019
+room	write-inside-range	btree-v3	btree-v3	30000	89550	30000	4899	0	0	0	-1	0.017
+room	growth	btree-v3	btree-v3	20000	20000	60000	3344	0	0	0	-1	0.034
+room	erasures	btree-v3	btree-v3	30000	14250	30750	2314	0	0	0	-1	0.020
+pressure	scattered-points	btree-v3	btree-v3	30000	45022	29982	11998	8263	16430	0	-1	0.027
+pressure	short-overlapping-ranges	btree-v3	btree-v3	30000	29920	30261	14925	11629	16720	0	-1	0.020
+pressure	long-ranges	btree-v3	btree-v3	30000	20000	30026	6367	3077	15210	0	-1	0.019
+pressure	write-inside-range	btree-v3	btree-v3	30000	89550	30000	4960	0	15570	0	-1	0.284
+pressure	growth	btree-v3	btree-v3	20000	20000	60000	13916	10658	11630	0	-1	0.019
+pressure	erasures	btree-v3	btree-v3	30000	14250	30750	5358	3062	15750	0	-1	0.021
+
+first differences: none

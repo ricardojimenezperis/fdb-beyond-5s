@@ -1,0 +1,1 @@
+api=3 tasks=16 block=2048 internal=40 leaf=59 workload=ranges batches=3000 reads=12000000 writes=2967779 prepS=1.790 readS=4.009 writeS=0.882 totalS=6.681 batchesPerS=449.0 readsPerS=2993309 writesPerS=3364614 conflicts=3479753 reclaimCV=0 decisions=df42a6e5c89796ea

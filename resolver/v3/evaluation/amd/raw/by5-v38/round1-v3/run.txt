@@ -1,0 +1,4 @@
+name=round1-v3 start=2026-11-04T22:12:15+01:00 end=2026-11-04T22:31:10+01:00 exit=0 cpu=7 sibling=15 topology=[7,7,0,0 15,7,0,0 ] docker_before=0 load_before=[1.60 1.18 1.75] dirty_kib_before=608
+cpu_busy=0.99965 sibling_busy=0.00007 hugepages=3300 thp=always [madvise] never kernel=6.8.0-138-generic
+docker_env=[-e RESOLVER1_PAGE_MODE=hugetlb -e BY5_TRACE=$TRACES/pilot-2000M-l0-7200.trace -e BY5_CPU=7 -e BY5_BATCH_LOG=/out/batches.csv -e BY5_SEGMENT_START=57600 -e BY5_SEGMENT_BATCHES=172800 -e BY5_PREHISTORY_BATCHES=57600 -e BY5_PRIME=0 -e BY5_FICT_MODEL=0 -e BY5_VALIDATE=0 -e BY5_PROCESS_SEED=1 -e BY5_FICT_SEED=1 -e BY5_WINDOW_US=0 -e BY5_FICT_LEAF=0] docker_opts=[--privileged -v $TRACES:$TRACES:ro] hugetlb_free_before=3300 hugetlb_min_free=228 hugetlb_total=3300
+command=[fdbserver-by5-nativemem -r by5resolvertest -C $MEASUREMENT/dummy.cluster -s 1 --knob_paged_resolver_pool_pages=98300]

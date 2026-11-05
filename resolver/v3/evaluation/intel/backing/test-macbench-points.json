@@ -1,0 +1,6 @@
+{
+  "pid": 99314,
+  "requested_mode": "hugetlb",
+  "coverage_check_passed": false,
+  "error": "[Errno 13] Permission denied: '/proc/99314/smaps'"
+}
