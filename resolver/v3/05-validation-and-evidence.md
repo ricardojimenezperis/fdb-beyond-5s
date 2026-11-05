@@ -21,10 +21,12 @@ The candidate bundle was recovered against the FDB base and checked with git fsc
 
 These checks validate the curated published source and its native integration. They do not establish a performance advantage. The Apple arm64 component run did not include native FDB compilation, sanitizer or coverage tests for this curated commit; the Linux integration run supplied the native build and replay checks above.
 
+On Intel, the campaign of the [evaluation](06-evaluation.md) ran the 228 component tests on the tree-equivalent measured commit, with assertions and with ASan/UBSan, 228 of 228 passing, together with FDB's `/fdbserver/conflictset/` and `/fdbserver/skiplist/` unit tests.
+
 ## Performance evidence boundaries
 
 The archived FDB/v1/v2 results and later v3.8 runs cross sessions and use different HugeTLB and code alignment conditions, so small differences cannot be promoted to controlled speedups. Stage-specific read or write ratios are not whole-batch results. A long-trace retention result must be reported separately from timing and with its memory-budget definition.
 
 The phase-gated benchmark, an optional footprint-walker parameter and alignment options used in some later experiments are not all part of the published v3.8 tree. A report should name the measured commit, extra patch and build flags, the public tree-equivalent commit, processor, workload, memory backing and session boundary.
 
-This design snapshot does not make an aggregate speed claim.
+The design documents of this snapshot make no speed claim; the [evaluation](06-evaluation.md) presents comparisons with FDB, v1 and v2 across sessions on Intel and AMD, each with its margin of uncertainty, without turning them into a general claim that v3 is faster.

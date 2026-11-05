@@ -37,7 +37,7 @@ The overlay inserts the new interval, preserves prior-version exteriors and remo
 
 Read checks may lazily refresh expired separators before referencing stored key bytes. They compact each leaf once before using stable ranks, queue empty nodes by pointer/generation and drain the queue after all tasks retire. Space pressure advances reclaimCV_ through the existing node/key allocation-age reclamation. The v3.8 design has no separate list of cleanup tasks.
 
-The v3.8 source is [resolver-v3](https://github.com/ricardojimenezperis/foundationdb/tree/resolver-v3) at 55d5f98974. Two later branches preserve v3.9 and v3.10–v3.17 as experiments. The [v3 design snapshot](../resolver/v3/03-resolver-v3-design.md) gives the state machine, invariants and validation boundaries; performance reports must identify their measured sources and conditions separately.
+The v3.8 source is [resolver-v3](https://github.com/ricardojimenezperis/foundationdb/tree/resolver-v3) at 55d5f98974. Two later branches preserve v3.9 and v3.10–v3.17 as experiments. The [v3 design snapshot](../resolver/v3/03-resolver-v3-design.md) gives the state machine, invariants and validation boundaries; the [v3 evaluation](../resolver/v3/06-evaluation.md) presents comparisons with FDB, v1 and v2 across sessions on Intel and AMD, each with its margin of uncertainty and its measured sources and conditions, without turning them into a general claim that v3 is faster.
 
 ## Alternatives and trade-offs
 

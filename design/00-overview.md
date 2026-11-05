@@ -125,5 +125,7 @@ will be measured separately.
 
 Runs will be reproducible, with configurations and seeds recorded,
 repeated timings and diagnostic instrumentation disabled for timing.
-Results are reported per component milestone, separately from the design;
-the first is [resolver v1](../resolver/v1/06-evaluation.md).
+Results are reported per component milestone, separately from the design:
+[resolver v1](../resolver/v1/06-evaluation.md),
+[resolver v2](../resolver/v2/06-evaluation.md) and
+[resolver v3](../resolver/v3/06-evaluation.md).

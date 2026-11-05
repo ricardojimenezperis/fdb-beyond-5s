@@ -3,7 +3,7 @@
 **Selected code:** [resolver-v3](https://github.com/ricardojimenezperis/foundationdb/tree/resolver-v3) at commit 55d5f98974b352f3a124439ae86beb0f8b7ca76d (v3.8, two groups of eight write tasks).  
 **Measured original:** d6bba393b92ca4dcf058a024dfcf890733d695c3, with the same tree 433edd77accbc70b47bfeaa4301e6da743139992.  
 **Lineage:** eight published version commits from resolver-v2 to v3.8; v3.9 and v3.10–v3.17 are separate experimental branches.  
-**Configuration:** two groups of eight write tasks are the selected default. This design snapshot makes no aggregate speed claim against FDB or earlier resolver versions.
+**Configuration:** two groups of eight write tasks are the selected default. The design documents make no speed claim; the [evaluation](06-evaluation.md) presents comparisons with FDB, v1 and v2 across sessions on Intel and AMD, each with its margin of uncertainty, without turning them into a general claim that v3 is faster.
 
 ## Start here
 
