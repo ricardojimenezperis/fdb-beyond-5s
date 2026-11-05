@@ -6,12 +6,16 @@
 
 | Role | Commit / tree | Meaning |
 |---|---|---|
-| Published v3.8 | 55d5f98974b352f3a124439ae86beb0f8b7ca76d | Head of resolver-v3; default 2×8 |
+| Published v3.8 | 55d5f98974b352f3a124439ae86beb0f8b7ca76d | Tag resolver-v3; default 2×8 |
 | Originally measured v3.8 | d6bba393b92ca4dcf058a024dfcf890733d695c3 | Same complete tree as the published commit |
 | Shared tree | 433edd77accbc70b47bfeaa4301e6da743139992 | Source identity independent of commit-history rewrite |
 | v2 public parent | 491d3f5a6fd02bea43b7b02502e35469afc2a53a | Base of curated v3 history |
 
 The candidate bundle was recovered against the FDB base and checked with git fsck --full --strict. The 17 published version trees match their original trees. Four original auxiliary commits were folded into v3.1 without changing that version's final tree. v3.9 and v3.10 have v3.8 as their common parent. The [original-to-published mapping](mapping.tsv) records the corresponding trees; measurements on originals must retain that provenance.
+
+### The resolver-v3 tag and branch
+
+The annotated tag `resolver-v3` points to 55d5f98974 and is not moved. Its tree keeps `fdbserver/resolver/resolver1/README.md` as inherited from v2: that README is titled resolver v2 and describes the btree-v2 integration. The `resolver-v3` branch continues past the tag with a documentation-only commit that updates that README to v3.8; it changes no source, test or build file. The source identity of v3.8 remains commit 55d5f98974 and tree 433edd77accbc70b47bfeaa4301e6da743139992, the tree of the measured commit d6bba393b9.
 
 ## Component and integration checks
 

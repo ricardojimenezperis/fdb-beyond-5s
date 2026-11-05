@@ -31,7 +31,10 @@ covers the snapshot's tests.
 ## Method
 
 **Only v3.8 was measured for this evaluation.** FDB, v1 and v2 are archived runs on the same machine, with the same
-work, the same harness and the same decisions. They come from earlier sessions:
+work and the same decisions. Every comparison below except the AMD standalone benchmark times the same phases of that
+work in both arms: conflictset and macBenchmark with the same harness code, skiplisttest with the same measured region,
+and by5 as the sum of the same per-batch totals. The AMD standalone benchmark times different phases, and is reported
+without a conclusion. The archived runs come from earlier sessions:
 
 | | v3.8 | FDB, v1, v2 |
 |---|---|---|
