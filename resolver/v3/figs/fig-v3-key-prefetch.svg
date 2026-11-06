@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="660" viewBox="0 0 1280 660" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#25314e"/></marker>
+  </defs>
+  <rect width="1280" height="660" fill="#fff"/>
+  <text x="48" y="50" font-size="26" font-weight="700" fill="#1f2a44">Stored-key prefetch in v3.8</text>
+  <text x="48" y="80" font-size="16" fill="#5b6578">A short span hints its first and last line. A longer span hints successive lines and yields at a linked-block boundary.</text>
+  <rect x="48" y="115" width="1184" height="190" rx="12" fill="#f8f9fb" stroke="#25314e" stroke-width="2"/>
+  <text x="70" y="148" font-size="19" font-weight="700" fill="#25314e">Short begin: 48 bytes starting at offset 600 in block A</text>
+  <text x="70" y="178" font-size="15" fill="#5b6578">The requested bytes occupy parts of lines 9 and 10; both addresses are computed within A.</text>
+  <rect x="74" y="207" width="1080" height="48" rx="5" fill="#e9edf3" stroke="#25314e"/>
+  <rect x="74" y="207" width="160" height="48" fill="#ced6e3"/>
+  <rect x="360" y="207" width="110" height="48" fill="#dff1e2" stroke="#27823a" stroke-width="2"/>
+  <rect x="470" y="207" width="110" height="48" fill="#dff1e2" stroke="#27823a" stroke-width="2"/>
+  <text x="99" y="237" font-size="15" fill="#25314e">header and earlier lines</text>
+  <text x="393" y="237" font-size="16" font-weight="700" fill="#27823a">line 9</text>
+  <text x="501" y="237" font-size="16" font-weight="700" fill="#27823a">line 10</text>
+  <text x="815" y="237" font-size="16" fill="#25314e">block A: 2 KiB</text>
+  <text x="74" y="281" font-size="15" fill="#5b6578">A hint is advisory; the later comparison still checks the entry CV and may take a demand miss.</text>
+  <rect x="48" y="326" width="1184" height="252" rx="12" fill="#fff8f2" stroke="#e8731a" stroke-width="2"/>
+  <text x="70" y="361" font-size="19" font-weight="700" fill="#25314e">Cross-block or long key: advance by prefetched chunks</text>
+  <text x="70" y="391" font-size="15" fill="#5b6578">Read traversal checks A's generation before following a link; the writer guards the entry CV and yields before using A.nextBlock.</text>
+  <rect x="75" y="424" width="470" height="60" rx="7" fill="#e9edf3" stroke="#25314e"/>
+  <rect x="75" y="424" width="115" height="60" fill="#ced6e3"/>
+  <rect x="445" y="424" width="100" height="60" fill="#dff1e2" stroke="#27823a" stroke-width="2"/>
+  <text x="95" y="460" font-size="15" fill="#25314e">A header</text>
+  <text x="460" y="460" font-size="15" fill="#27823a">A bytes</text>
+  <path d="M556 454 H706" stroke="#25314e" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="580" y="439" font-size="14" fill="#5b6578">nextBlock</text>
+  <rect x="724" y="424" width="470" height="60" rx="7" fill="#e9edf3" stroke="#25314e"/>
+  <rect x="724" y="424" width="115" height="60" fill="#ced6e3"/>
+  <rect x="839" y="424" width="120" height="60" fill="#dff1e2" stroke="#27823a" stroke-width="2"/>
+  <text x="742" y="460" font-size="15" fill="#25314e">B header</text>
+  <text x="853" y="460" font-size="15" fill="#27823a">B bytes</text>
+  <text x="74" y="519" font-size="15" fill="#5b6578">The continuation skips B's header; more lines or blocks are hinted when the requested span is longer.</text>
+  <text x="74" y="548" font-size="15" fill="#5b6578">This bounds the work of each yielded step, not the total hints for an arbitrarily long key.</text>
+  <text x="48" y="621" font-size="15" fill="#25314e">Key blocks contain append-only variable-length records; a RangeRef stores A, its offset, lengths and A's generation.</text>
+</svg>
