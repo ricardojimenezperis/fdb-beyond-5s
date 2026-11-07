@@ -2,8 +2,9 @@
 
 The evidence behind the [evaluation](../06-evaluation.md) of resolver v3.8 on an **Intel Core Ultra 9 285K** and an
 **AMD Ryzen 7 7700**: run records, extracted data, manifests, binary and source hashes, decision checks, the scripts
-that produce every table, and the write-group sweeps of both machines. Each machine has its own directory; no file
-combines them.
+that produce every table, and the write-group sweeps of both machines. Each machine has its own directory and no
+file combines their resolver results. The one directory with data of both machines is the AMD dependent-memory
+campaign, which carries its Intel reference.
 
 The measured commit is `d6bba393b92ca4dcf058a024dfcf890733d695c3`; the published commit `55d5f98974` (tag
 [`resolver-v3`](https://github.com/ricardojimenezperis/foundationdb/tree/resolver-v3)) has the same tree,
@@ -29,6 +30,7 @@ The measured commit is `d6bba393b92ca4dcf058a024dfcf890733d695c3`; the published
 | `amd/data/` | one row per run, extracted from `raw/`; archived by5 totals; by5 per-batch times and analysis |
 | `amd/BIN-SHA256SUMS`, `amd/correctness/` | binaries; unit tests and smoke replay of the public commit |
 | `amd/scripts/` | campaign scripts as run, and `extract.py`, `make_tables.py` |
+| [`amd/memlat/2026-11-07-cpu7/`](amd/memlat/2026-11-07-cpu7/REPORT.md) | Byte-identical replay of the Intel dependent-pointer benchmark on the Ryzen 7 7700. It characterizes serial load-to-use latency across the cache and memory hierarchy, verifies ordinary 4 KiB backing and publishes the raw runs, chain validation and between-process variation. It is diagnostic evidence for interpreting the Intel/AMD split, not a direct measurement of the HugeTLB-backed v3.8 pool. |
 | `SHA256SUMS` | every file under this directory |
 
 The AMD references are the published data of the resolver v2 evaluation,
@@ -62,11 +64,31 @@ by5 batch logs; they are not included (see below), so those files are not regene
 checked from the per-batch times by `intel/scripts/make_tables.py`; those of FDB and v1 are the figures published in
 the resolver v1 evaluation, and v2's are in the resolver v2 evaluation.
 
+## Dependent-memory latency
+
+The [campaign](amd/memlat/2026-11-07-cpu7/REPORT.md) behind [this subsection of the
+evaluation](../06-evaluation.md#dependent-memory-latency) replays the [Intel
+campaign](../../v2/evaluation/intel/memlat/README.md) with the same source (`src/chase.c`, SHA-256
+`2cc2d07fe131e64e9b06ae7f087b35fa9000d5284bf55ff68a578e6e4d3588d5`) and a byte-identical binary (`chase`, SHA-256
+`a8c5d3ff83f4ff5a1fc54319a8a5d4d1e3900fb4d86ac22b853c4d8357069673`). It ran on CPU 7 with its SMT sibling, CPU 15, idle,
+on ordinary 4 KiB pages and with no software prefetch: five in-process timed repetitions per working-set size, and five
+whole-process sweeps that expose the variation at 1 MiB. Its own checksums and analysis, from this directory:
+
+```sh
+cd amd/memlat/2026-11-07-cpu7
+sha256sum -c SHA256SUMS
+python3 scripts/check.py > analysis/check.txt
+```
+
+The last line of `analysis/check.txt` reads `problems: none`, and the regenerated file is byte-identical to the
+published one.
+
 ## What the records are
 
 - Paths of the measuring machines are replaced by variables (`$HOME`, `$CAMPAIGNS`, `$EVAL`, …) and binary paths by
   the binary's name; binaries are identified by SHA-256.
-- Campaign scripts are kept as run. `intel/scripts/tables.py` has its two input paths changed to this layout.
+- Campaign scripts are kept as run. `intel/scripts/tables.py` has its two input paths changed to this layout, and the
+  dependent-memory campaign's scripts derive their root from their own location.
 - `amd/raw/v38/MANIFEST` omits the hash of one helper script that the campaign did not use.
 - Files of an internal control arm that is not part of this evaluation are omitted, and its rows are removed from the
   Intel by5 analysis files and from `analyze-by5.py`. FDB trace files are not included.
@@ -76,4 +98,4 @@ the resolver v1 evaluation, and v2's are in the resolver v2 evaluation.
 - The full by5 batch logs, identified by SHA-256 in each run's `batch-logs.sha256` and, for the Intel references, in
   `intel/references/by5/BATCH-LOGS-CANONICAL.txt`. The per-batch times of every v3.8 timed run are included.
 - The 7,200 s trace, which the resolver v1 evaluation shows how to regenerate.
-- The binaries.
+- The binaries of the resolver campaigns. The dependent-memory campaign includes its `chase` binary.

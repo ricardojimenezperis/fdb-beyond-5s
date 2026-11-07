@@ -1,0 +1,17 @@
+name=d1-smaps
+docker_containers_before=0
+load_before=0.28 0.09 0.03
+dirty_kib_before=184
+freq_khz_before=400000
+nr_hugepages_before=0
+thp_before=always [madvise] never
+governor_before=powersave
+start=2026-11-07T01:08:10+01:00
+command=timeout 1500 /usr/bin/time -v -o OUT/time.txt taskset -c 7 numactl --membind=0 $CAMPAIGN/chase 7 536870912 536870912
+end=2026-11-07T01:08:29+01:00 exit=0
+cpu7_busy=0.99949
+cpu15_busy=0.00000
+freq_khz_after=4275906
+load_after=0.49 0.15 0.05
+docker_containers_after=0
+nr_hugepages_after=0

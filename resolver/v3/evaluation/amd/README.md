@@ -159,6 +159,36 @@ spread between rounds of 0.33% (points) and 0.45% (ranges). 2×12 is slightly sl
 three-group write phases are 1.0–1.4% shorter (3×20 in points 1.3% longer), which is 0.1–0.2% of the whole batch and
 does not show in it. No variant qualifies for the integrated benchmarks; 2×8 stays.
 
+## Dependent-memory latency
+
+Byte-identical replay of the Intel dependent-pointer benchmark on the Ryzen 7 7700. It characterizes serial load-to-use
+latency across the cache and memory hierarchy, verifies ordinary 4 KiB backing and publishes the raw runs, chain
+validation and between-process variation. It is diagnostic evidence for interpreting the Intel/AMD split, not a direct
+measurement of the HugeTLB-backed v3.8 pool. The [evaluation](../../06-evaluation.md#dependent-memory-latency) gives its
+results and their reading, the [campaign report](memlat/2026-11-07-cpu7/REPORT.md) every run and check, and the [Intel
+campaign](../../../v2/evaluation/intel/memlat/README.md) the reference it replays.
+
+| | |
+|---|---|
+| source | `src/chase.c`, SHA-256 `2cc2d07fe131e64e9b06ae7f087b35fa9000d5284bf55ff68a578e6e4d3588d5`, unchanged from the Intel campaign |
+| binary | `chase`, SHA-256 `a8c5d3ff83f4ff5a1fc54319a8a5d4d1e3900fb4d86ac22b853c4d8357069673` on both machines |
+| compiler | `gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0` |
+| build | `gcc -O2 -fno-prefetch-loop-arrays -Wall -o chase src/chase.c`; no `-falign-functions=64`, because the experiment reproduced the Intel build exactly |
+| placement | CPU 7, with its SMT sibling, CPU 15, idle; memory on node 0 |
+| pages | ordinary 4 KiB; the 512 MiB mapping was verified as 4 KiB with no THP or HugeTLB |
+| prefetch | no prefetch instruction in the binary |
+| repetitions | 69 working-set sizes, each with five in-process timed repetitions; the table uses the preselected primary process |
+| sweeps | five whole-process sweeps, which expose the variation at 1 MiB (medians 5.493 to 6.422 ns/access) |
+| validation | all executions exited successfully; a chain validator on the same binary found, at all 69 sizes, a single cycle visiting every cache-line element |
+
+To verify its checksums and regenerate its analysis, from this directory:
+
+```sh
+cd memlat/2026-11-07-cpu7
+sha256sum -c SHA256SUMS
+python3 scripts/check.py > analysis/check.txt
+```
+
 ## Files
 
 | path | what it holds |
@@ -170,6 +200,7 @@ does not show in it. No variant qualifies for the integrated benchmarks; 2×8 st
 | `data/by5/analysis-fdb265-v38.json` | retention, memory and timing of by5, archived FDB and v3.8 |
 | `raw/v38/`, `raw/by5-v38/`, `raw/sweep/` | per run: `run.txt` (core, sibling load, HugeTLB, command), `stdout.txt`, `stderr.txt`, `rusage.txt`; session logs, manifests, reservation records; `batch-logs.sha256` for by5 |
 | `BIN-SHA256SUMS`, `correctness/` | binaries and validation |
+| `memlat/2026-11-07-cpu7/` | the dependent-memory campaign, self-contained, with its own `SHA256SUMS` |
 | `scripts/` | the campaign scripts as run (`build-v38.sh`, `campaign-v38.sh`, `by5-v38.sh`, `runone.sh`, `rusage.py`, `prepare_memory.py`, `sweep-*.sh`) and the two analysis scripts |
 
 **Changes from the campaign's own files.** Paths of the measuring machine are replaced by variables, and binary paths by
@@ -177,4 +208,4 @@ the binary's name. `raw/v38/MANIFEST` omits the hash of one helper script that t
 files are not included.
 
 **Not included.** The full by5 batch logs (identified in each run's `batch-logs.sha256`), the 7,200 s trace and the
-binaries. Not run: the integrated stage of the sweep, profiles.
+resolver binaries. Not run: the integrated stage of the sweep, profiles.

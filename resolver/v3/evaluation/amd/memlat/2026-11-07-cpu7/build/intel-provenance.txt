@@ -1,0 +1,3 @@
+source repository: github.com/ricardojimenezperis/fdb-beyond-5s, branch main, commit 024a90db6534449fae09d6290eef924b67e32de8
+campaign added in commit 2ba4c5d2b2d8a2faa05a889ab540e239782464ea
+path in that repository: resolver/v2/evaluation/intel/memlat/2026-10-31-cpu6/

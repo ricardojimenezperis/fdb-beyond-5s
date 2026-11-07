@@ -1,0 +1,25 @@
+61e8f22e8000 bind:0 file=$CAMPAIGN/chase mapped=1 active=0 N0=1 kernelpagesize_kB=4
+61e8f22e9000 bind:0 file=$CAMPAIGN/chase mapped=1 active=0 N0=1 kernelpagesize_kB=4
+61e8f22ea000 bind:0 file=$CAMPAIGN/chase mapped=1 active=0 N0=1 kernelpagesize_kB=4
+61e8f22eb000 bind:0 file=$CAMPAIGN/chase anon=1 dirty=1 active=0 N0=1 kernelpagesize_kB=4
+61e8f22ec000 bind:0 file=$CAMPAIGN/chase anon=1 dirty=1 active=0 N0=1 kernelpagesize_kB=4
+61e8f22ed000 bind:0 anon=1 dirty=1 N0=1 kernelpagesize_kB=4
+61e8fc0c1000 bind:0 heap anon=1 dirty=1 active=0 N0=1 kernelpagesize_kB=4
+7c869ffff000 bind:0 anon=16385 dirty=16385 active=10 N0=16385 kernelpagesize_kB=4
+7c86a4000000 bind:0 anon=131072 dirty=131072 active=0 N0=131072 kernelpagesize_kB=4
+7c86c4000000 bind:0 file=/usr/lib/x86_64-linux-gnu/libc.so.6 mapped=40 mapmax=45 N0=40 kernelpagesize_kB=4
+7c86c4028000 bind:0 file=/usr/lib/x86_64-linux-gnu/libc.so.6 mapped=296 mapmax=49 N0=296 kernelpagesize_kB=4
+7c86c41b1000 bind:0 file=/usr/lib/x86_64-linux-gnu/libc.so.6 mapped=47 mapmax=48 N0=47 kernelpagesize_kB=4
+7c86c4200000 bind:0 file=/usr/lib/x86_64-linux-gnu/libc.so.6 anon=4 dirty=4 active=0 N0=4 kernelpagesize_kB=4
+7c86c4204000 bind:0 file=/usr/lib/x86_64-linux-gnu/libc.so.6 anon=2 dirty=2 active=0 N0=2 kernelpagesize_kB=4
+7c86c4206000 bind:0 anon=5 dirty=5 active=0 N0=5 kernelpagesize_kB=4
+7c86c42a1000 bind:0 anon=2 dirty=2 active=0 N0=2 kernelpagesize_kB=4
+7c86c42aa000 bind:0 anon=1 dirty=1 active=0 N0=1 kernelpagesize_kB=4
+7c86c42ac000 bind:0 file=/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 mapped=1 mapmax=44 N0=1 kernelpagesize_kB=4
+7c86c42ad000 bind:0 file=/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 mapped=43 mapmax=47 N0=43 kernelpagesize_kB=4
+7c86c42d8000 bind:0 file=/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 mapped=10 mapmax=45 N0=10 kernelpagesize_kB=4
+7c86c42e2000 bind:0 file=/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 anon=2 dirty=2 active=0 N0=2 kernelpagesize_kB=4
+7c86c42e4000 bind:0 file=/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 anon=2 dirty=2 active=0 N0=2 kernelpagesize_kB=4
+7ffebb191000 bind:0 stack anon=4 dirty=4 active=0 N0=4 kernelpagesize_kB=4
+7ffebb1d8000 bind:0
+7ffebb1dc000 bind:0

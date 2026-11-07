@@ -1,0 +1,8 @@
+%CPU PSR     PID COMMAND
+ 0.3   7 1142391 claude
+ 0.2   7 1142111 claude
+ 0.2  10 1173372 claude
+ 0.0   7 2036168 containerd
+ 0.0   4 1141972 MainThread
+ 0.0   4 1141530 MainThread
+ 0.0  15    5958 dockerd

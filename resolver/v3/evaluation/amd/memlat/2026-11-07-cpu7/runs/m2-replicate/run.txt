@@ -1,0 +1,17 @@
+name=m2-replicate
+docker_containers_before=0
+load_before=0.87 0.73 0.37
+dirty_kib_before=88
+freq_khz_before=400000
+nr_hugepages_before=0
+thp_before=always [madvise] never
+governor_before=powersave
+start=2026-11-07T01:14:53+01:00
+command=timeout 1500 /usr/bin/time -v -o OUT/time.txt taskset -c 7 numactl --membind=0 $CAMPAIGN/chase 7 4096 536870912
+end=2026-11-07T01:17:45+01:00 exit=0
+cpu7_busy=1.00000
+cpu15_busy=0.00017
+freq_khz_after=4253586
+load_after=1.00 0.86 0.48
+docker_containers_after=0
+nr_hugepages_after=0

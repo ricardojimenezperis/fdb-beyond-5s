@@ -1,0 +1,17 @@
+name=m1-primary
+docker_containers_before=0
+load_before=0.84 0.53 0.22
+dirty_kib_before=156
+freq_khz_before=400000
+nr_hugepages_before=0
+thp_before=always [madvise] never
+governor_before=powersave
+start=2026-11-07T01:11:51+01:00
+command=timeout 1500 /usr/bin/time -v -o OUT/time.txt taskset -c 7 numactl --membind=0 $CAMPAIGN/chase 7 4096 536870912
+end=2026-11-07T01:14:42+01:00 exit=0
+cpu7_busy=1.00000
+cpu15_busy=0.00035
+freq_khz_after=3643410
+load_after=1.03 0.76 0.37
+docker_containers_after=0
+nr_hugepages_after=0

@@ -1,0 +1,13 @@
+$ gcc --version
+gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+Copyright (C) 2023 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+$ dpkg-query gcc-13 binutils libc6 libc6-dev
+binutils 2.42-4ubuntu2.10
+gcc-13 13.3.0-6ubuntu2~24.04.1
+libc6 2.39-0ubuntu8.9
+libc6-dev 2.39-0ubuntu8.9
+$ gcc -O2 -fno-prefetch-loop-arrays -Wall -o chase src/chase.c
+rc=0

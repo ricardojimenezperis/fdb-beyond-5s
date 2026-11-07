@@ -1,0 +1,12 @@
+./chase: OK
+./out/chase-output.txt: OK
+./out/compiler.txt: OK
+./out/env.txt: OK
+./out/freq-cpu6.txt: OK
+./out/memlat-cpu6.csv: OK
+./out/memlat-cpu6.png: OK
+./out/sha256.txt: OK
+./out/time.txt: OK
+./out/topology.txt: OK
+./README.md: OK
+./src/chase.c: OK

@@ -1,0 +1,5 @@
+cpu7 driver=amd-pstate-epp governor=powersave min_khz=400000 max_khz=5389000 cpuinfo_min=400000 cpuinfo_max=5389000 epp=performance
+cpu15 driver=amd-pstate-epp governor=powersave min_khz=400000 max_khz=5389000 cpuinfo_min=400000 cpuinfo_max=5389000 epp=performance
+boost=
+amd_pstate_status=active
+published_campaign_v38_manifest: image sha256:591bb3f7b9a8c83ca8ddac97f0d05239532d0dd03eef411094e9fc23766879f7 kernel 6.8.0-138-generic governor powersave thp always [madvise] never

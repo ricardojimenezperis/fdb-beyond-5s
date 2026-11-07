@@ -1,0 +1,4 @@
+/usr/bin/taskset
+/usr/bin/numactl
+taskset from util-linux 2.39.3
+2.0.18

@@ -10,8 +10,9 @@ history as v1 and v2 under the same 6 GiB budget, more than twice FDB's configur
 
 The benchmarks keep their paths separate: FDB's `conflictset/benchmark`, the custom benchmark integrated into FDB
 (`macBenchmark`), that benchmark's standalone executable (`blocksizebench`), `skiplisttest`, and the long trace (by5).
-Every ratio compares candidates on one machine. No figure from the Intel machine is compared with a figure from the
-AMD machine.
+Every ratio of resolver times compares candidates on one machine, and no resolver time from the Intel machine is
+compared with one from the AMD machine. The one cross-machine table is the
+[dependent-memory latency](#dependent-memory-latency) diagnostic, which runs one byte-identical binary on both.
 
 ## Measured code
 
@@ -86,6 +87,57 @@ maximum over every pair of runs. **Phase times are diagnostics.** v3.8 does part
 pass, so its read phase is longer and its write phase much shorter than v2's; a phase ratio is not a gain of the whole
 and is not quoted as one.
 
+### Dependent-memory latency
+
+A dependent-pointer traversal characterizes the serial data-access latency that recursive partitioning removes and
+cooperative scheduling attempts to overlap. The same byte-identical binary was run on both machines: one dependent
+pointer per 64-byte cache line, randomized into one chain, ordinary 4 KiB pages, no software prefetch and five timed
+repetitions per working-set size. Because each loaded pointer determines the address of the next load, the experiment
+exposes no memory-level parallelism between iterations.
+
+| Working set | Intel median, ns/access | AMD median, ns/access | AMD / Intel |
+|---|---:|---:|---:|
+| 26.9 KiB | 0.704 | 0.753 | 1.07 |
+| 45.3 KiB | 0.707 | 2.739 | 3.87 |
+| 1 MiB | 3.637 | 6.282 | 1.73 |
+| 16 MiB | 19.210 | 11.985 | 0.62 |
+| 512 MiB | 163.232 | 103.828 | 0.64 |
+
+The 26.9 KiB working set fits in both L1 data caches and gives similar latency. At 45.3 KiB, Intel remains on the
+plateau of its 48 KiB L1, while AMD has exceeded its 32 KiB L1. At 1 MiB, the working set fits within Intel's 3 MiB
+private L2 but lies at the capacity boundary of AMD's 1 MiB L2. The ordering reverses at larger sizes: AMD has the lower
+dependent-access latency at 16 MiB and 512 MiB. From the common L1-resident point to 512 MiB, latency grows by 231.9× on
+Intel and 137.9× on AMD.
+
+AMD is therefore not a uniformly slower memory system. Its smaller private caches make the medium working-set region
+more expensive, while its last-level-cache and large-working-set latency are lower in this experiment. This difference
+is consistent with the Resolver's cross-machine behaviour. Cooperative scheduling has a fixed cost in task state,
+dispatch, branches and instructions, and increases the set of leaves, keys and task records that remain live between a
+prefetch and its use. Intel provides more private-cache capacity for that active set and has substantially more
+far-memory latency for recursive partitioning and cooperative prefetching to remove or hide. AMD provides less
+private-cache headroom, but a miss that reaches the shared cache or DRAM is cheaper, leaving less latency against which
+to amortize the scheduler's fixed work.
+
+That combination provides a plausible architectural explanation for the measured pattern: v3.8 obtains its clearest
+gains on Intel, while on AMD it is comparable on the long trace and most range and key-layout workloads but slower in
+the integrated point workload. It does not by itself explain the `conflictset` range result. That workload commits only
+16.5% of its transactions, so FoundationDB's early termination after a conflict remains an independent algorithmic
+advantage.
+
+The pointer chase is a diagnostic, not a causal attribution. It permits only one outstanding dependent access and uses
+ordinary 4 KiB pages, whereas v3.8 interleaves several tasks and maps its tree pool with HugeTLB. A complete attribution
+would require paired Resolver and FoundationDB measurements of cache residency, load waits, prefetch timeliness, branch
+behaviour and CPU-frontend starvation in the same sessions.
+
+The AMD 1 MiB result is less stable across process launches than the other selected points. The preselected primary
+process measured 6.282 ns/access; the medians of five complete processes ranged from 5.493 to 6.422 ns/access.
+Physical-page placement is consistent with that variation but was not controlled or recorded, so its cause is not
+established. The table reports the preselected primary process. Intel has only one recorded process, so its
+corresponding between-process variation is unknown.
+
+Evidence: [Intel dependent-pointer campaign](../v2/evaluation/intel/memlat/README.md) and [AMD dependent-pointer
+campaign](evaluation/amd/memlat/2026-11-07-cpu7/REPORT.md).
+
 ## Intel Core Ultra 9 285K
 
 | load | v3.8, s | FDB, s | v1, s | v2, s | v3.8 / FDB | v3.8 / v1 | v3.8 / v2 |
@@ -137,6 +189,12 @@ margin, ±7% on this machine.
 - **Against FDB:** slower in conflictset ranges (1.28) and macBenchmark points (1.30); comparable in conflictset
   points (1.04), macBenchmark ranges, every skiplisttest layout (0.94–1.00) and by5 (0.96).
 - **Against v1:** faster everywhere except conflictset ranges (slower, 1.34).
+
+The dependent-memory characterization above helps interpret, but does not independently prove, this architectural split.
+Intel combines larger private caches with a larger far-memory penalty, giving the cooperative traversal both more cache
+headroom and more latency to hide. AMD's smaller private caches and lower large-working-set latency reduce both
+quantities. The unusually abort-heavy `conflictset` range workload additionally favours FoundationDB's early termination
+path.
 
 **The standalone benchmark is not compared on this machine.** The archived v1 and v2 runs used each version's own
 benchmark, which times only the read check and the write merge. v3.8's benchmark also times the preparation of the

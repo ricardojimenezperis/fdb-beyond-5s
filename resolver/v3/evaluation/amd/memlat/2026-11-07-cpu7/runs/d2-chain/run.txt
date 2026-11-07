@@ -1,0 +1,17 @@
+name=d2-chain
+docker_containers_before=0
+load_before=0.41 0.14 0.05
+dirty_kib_before=48
+freq_khz_before=400000
+nr_hugepages_before=0
+thp_before=always [madvise] never
+governor_before=powersave
+start=2026-11-07T01:08:39+01:00
+command=timeout 1500 /usr/bin/time -v -o OUT/time.txt taskset -c 7 numactl --membind=0 env LD_PRELOAD=$CAMPAIGN/validation/chainwalk.so CHAINWALK_BYTES=536870912 CHAINWALK_OUT=OUT/chain.csv CHAINWALK_SMAPS=OUT/smaps-512mib-case.txt $CAMPAIGN/chase 7 4096 536870912
+end=2026-11-07T01:11:40+01:00 exit=0
+cpu7_busy=0.99994
+cpu15_busy=0.00000
+freq_khz_after=4265159
+load_after=1.00 0.55 0.23
+docker_containers_after=0
+nr_hugepages_after=0
