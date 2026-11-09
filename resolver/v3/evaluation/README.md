@@ -1,13 +1,15 @@
-# Resolver v3 evaluation · Evidence
+# Resolver v3.8 evaluation · Historical evidence
 
-The evidence behind the [evaluation](../06-evaluation.md) of resolver v3.8 on an **Intel Core Ultra 9 285K** and an
+This directory preserves the evidence behind the original evaluation of resolver v3.8 on an **Intel Core Ultra 9 285K** and an
 **AMD Ryzen 7 7700**: run records, extracted data, manifests, binary and source hashes, decision checks, the scripts
 that produce every table, and the write-group sweeps of both machines. Each machine has its own directory and no
 file combines their resolver results. The one directory with data of both machines is the AMD dependent-memory
 campaign, which carries its Intel reference.
 
-The measured commit is `d6bba393b92ca4dcf058a024dfcf890733d695c3`; the published commit `55d5f98974` (tag
-[`resolver-v3`](https://github.com/ricardojimenezperis/foundationdb/tree/resolver-v3)) has the same tree,
+These records are intentionally unchanged historical evidence. Their 228-test count and timing conclusions do not describe final Resolver v3. The selected final evaluation is [the current summary](../06-evaluation.md), backed by the [consolidated report](https://github.com/ricardojimenezperis/foundationdb/blob/resolver-v3/fdbserver/resolver/resolver1/evaluation/REPORT.md) and the [`resolver-v3-final` release assets](https://github.com/ricardojimenezperis/foundationdb/releases/tag/resolver-v3-final).
+
+The measured commit is `d6bba393b92ca4dcf058a024dfcf890733d695c3`; the published commit `55d5f98974` (historical tag
+[`resolver-v3`](https://github.com/ricardojimenezperis/foundationdb/releases/tag/resolver-v3)) has the same tree,
 `433edd77accbc70b47bfeaa4301e6da743139992` ([mapping](../mapping.tsv)). Run records name the measured commit.
 
 ## Contents

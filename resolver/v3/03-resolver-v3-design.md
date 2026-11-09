@@ -1,8 +1,8 @@
-# Temporal conflict B+ tree · Resolver v3.8 design
+# Temporal conflict B+ tree · Final Resolver v3 design
 
 [Index](README.md) · [Current Resolver design](../../design/02-resolver.md) · [v2 snapshot](../v2/README.md)
 
-**Selected implementation:** [resolver-v3](https://github.com/ricardojimenezperis/foundationdb/tree/resolver-v3), commit `55d5f98974b352f3a124439ae86beb0f8b7ca76d`. This document describes the selected v3.8 tree and its default two groups of eight write tasks. It specifies the complete resolver, including the storage and maintenance mechanisms used by its read and write paths.
+**Selected implementation:** [resolver-v3](https://github.com/ricardojimenezperis/foundationdb/tree/resolver-v3), production commit `f866c98d8585a77280adbf44c72650f16e975f86`, released as [`resolver-v3-final`](https://github.com/ricardojimenezperis/foundationdb/releases/tag/resolver-v3-final). This document describes final v3 and its default two groups of eight write tasks. It specifies the complete resolver, including the storage and maintenance mechanisms used by its read and write paths. V3.8 (`55d5f98974`) is its historical base.
 
 ## 1. Purpose, semantics and interface
 
@@ -61,7 +61,7 @@ A point interval `[k,k\0)` stores the endpoint `k\0` once and treats its prefix 
 
 Logical expiry, physical reclamation and pointer validity are different facts. An entry with CV at or below the cutoff may still occupy a leaf. A key block has a conservative maximum CV for its records and can remain allocated after some records expire. Key blocks are reclaimed in allocation order; the first-block generation in a nonempty key reference is valid only if it exceeds `lastReclaimedKeyGeneration_`. This test does not dereference a possibly reused block. While the first block of a record survives, continuation blocks cannot have been reclaimed ahead of it. Before reading an expired entry or separator, the algorithm tests its CV and refreshes or skips it instead of dereferencing freed key bytes.
 
-Node generations serve another purpose: deferred cleanup stores `(node,generation)`, checks that pair before releasing the node, and skips duplicate records for a node already released. A node generation must not be confused with a key-block generation merely because both live in reusable pool blocks.
+Node generations serve another purpose: deferred cleanup stores `(node,generation)`, checks that pair before releasing the node, and skips duplicate records for a node already released. Final v3 assigns node and key-block generations from disjoint value spaces. They cannot compare equal merely because a pool block was released in one role and reused in the other.
 
 ![Key-block generations validate range references, while node generations validate deferred cleanup records.](figs/fig-v3-generation.svg)
 
@@ -82,11 +82,11 @@ The 64 KiB `Page` is the pool's **logical allocation unit**, not an operating-sy
 
 The explicit Linux mappings round the backing length up to a multiple of 2 MiB, while the usable pool still contains `floor(budget / 64 KiB)` logical pages. The padding can make the mapped length slightly greater than the counted pool storage. The mode backs **only the shared history pool**: temporary batch arrays, task slots, pending cleanup records and other process allocations are outside it. It does not change the history cutoff or reclaim policy. On non-Linux platforms the explicit modes are unavailable; `legacy` remains usable.
 
-The v3.8 publication measurements selected `RESOLVER1_PAGE_MODE=hugetlb` and verified that the history pool used HugeTLB pages. That is a measurement configuration, not the source default. Those runs also differ from the archived FDB/v1/v2 references in session and alignment, so their elapsed-time ratios do not isolate the effect of huge pages. `thp` would need its own backing verification before attributing a result to actual huge-page coverage.
+The final publication measurements select `RESOLVER1_PAGE_MODE=hugetlb` and verify that the complete history pool uses HugeTLB pages in every timed run. That is the published deployment configuration, not the source default. FDB, v1 and v2 use their native ordinary-memory implementations, so the comparison represents deployed configurations and does not isolate the effect of page mode. `thp` would need its own backing verification before attributing a result to actual huge-page coverage.
 
 ![One shared pool with four backing modes: logical 64 KiB pages contain reusable 2 KiB blocks, while HugeTLB can map the pool using 2 MiB pages.](figs/fig-v3-hugetlb.png)
 
-*Figure 5. The same logical pool can use ordinary allocation, an explicit base-page mapping, transparent huge-page advice or explicit 2 MiB HugeTLB backing. HugeTLB increases the address range covered by each page translation without changing tree operations or the logical budget. The v3.8 measurements used HugeTLB, but they do not isolate its speed effect.*
+*Figure 5. The same logical pool can use ordinary allocation, an explicit base-page mapping, transparent huge-page advice or explicit 2 MiB HugeTLB backing. HugeTLB increases the address range covered by each page translation without changing tree operations or the logical budget. Final v3's published performance configuration uses HugeTLB, but the evaluation does not isolate its effect.*
 
 For precision when reading the diagram, the 4 KiB and 2 MiB counts are **page mappings needed to cover the pool**, not the number of translations executed or a 512-fold speedup. `MADV_NOHUGEPAGE` disables transparent huge pages for the `base` mapping; it does not pin memory. Archived FDB uses its own allocator rather than the `legacy` mode of this `PagePool`. The latency table includes cache effects as well as address translation and is not a direct comparison between backing modes.
 
@@ -122,7 +122,7 @@ At a node with `s` child boundaries and `r` begins, independent binary searches 
 
 ![Recursive partitioning distributes sorted begins among child destinations.](figs/fig-v3-recursive-partition.svg)
 
-*Figure 7. The middle child boundary divides the sorted begin slice into smaller subproblems. A resolved boundary is excluded from further comparisons and equal begins go right. The drawing illustrates routing; v3.8 routes both read and write begins by this rule.*
+*Figure 7. The middle child boundary divides the sorted begin slice into smaller subproblems. A resolved boundary is excluded from further comparisons and equal begins go right. The drawing illustrates routing; final v3 routes both read and write begins by this rule.*
 
 ### Read-scheduler tasks and prefetch
 
@@ -180,7 +180,7 @@ Separator repair does not erase internal child slots while read tasks have saved
 
 `addWrites` sees the admission decisions only after `checkReads` has finished. A rejected or too-old transaction contributes no write. The accepted begins are streamed in the input's sorted endpoint order. The union maintains the first begin index and a running end index; overlapping intervals merge, while adjacent intervals may stay separate. It uses indices into the caller's endpoint array, without copying endpoint bytes or allocating an interval object per input interval. All output intervals from one call carry its common CV.
 
-Before applying the union, one representative is prepared for each destination leaf named by the read phase's write groups. Several groups can share the same leaf and representative. A representative retains a right-neighbour-check requirement from a write destination, the first accepted begin relevant to it, and a leaf mutation counter. When one input interval is absorbed into a merged interval, its begin does not create another write; the merged interval keeps the prepared destination of its *first* begin. A previously rejected begin can precede an accepted one on the same leaf, so the representative must be updated to the first *accepted* begin rather than blindly reusing the first write seen during the read phase.
+Before applying the union, one representative is prepared for each destination leaf named by the read phase's write groups. Several groups can share the same leaf and representative. A representative retains a right-neighbour-check requirement from a write destination and the first accepted begin relevant to it. Each saved write rank records the destination leaf generation and mutation epoch at which that rank was computed. When one input interval is absorbed into a merged interval, its begin does not create another write; the merged interval keeps the prepared destination of its *first* begin. A previously rejected begin can precede an accepted one on the same leaf, so the representative must be updated to the first *accepted* begin rather than blindly reusing the first write seen during the read phase.
 
 ![Accepted write intervals are unioned by endpoint index and reuse destinations prepared during checkReads.](figs/fig-v3-accepted-union.png)
 
@@ -190,7 +190,7 @@ The outcome is an ordered sequence of disjoint writes for this call. Applying ea
 
 ## 6. Cooperative write scheduling
 
-The selected build has `RESOLVER1_WRITE_GROUPS=2` and `RESOLVER1_WRITE_LG=8`: two groups of eight slots, at most 16 write tasks. The optional three-group policy and a scalar fallback with zero LG are different source configurations, not the selected v3.8 policy. The scheduler runs on one thread and is non-preemptive: one visit advances one task until it hints a memory dependency, parks, or completes. No two tree mutations occur concurrently.
+The selected build has `RESOLVER1_WRITE_GROUPS=2` and `RESOLVER1_WRITE_LG=8`: two groups of eight slots, at most 16 write tasks. The optional three-group policy and a scalar fallback with zero LG are different source configurations, not the selected final-v3 policy. The scheduler runs on one thread and is non-preemptive: one visit advances one task until it hints a memory dependency, parks, or completes. No two tree mutations occur concurrently.
 
 The oldest task of the oldest group is the **only writer**. Younger tasks can locate their destination, prefetch leaf and stored-key data and stop at `SearchReady`. A parked task leaves the runnable bitmap and is woken when it becomes oldest; repeatedly polling it would waste visits. The successor group is filled early and its leaves hinted, but its searches become runnable when the oldest group's first index reaches its halfway point. Once the oldest group finishes, that slot is refilled and group roles rotate. This overlaps independent memory waits with useful work on older tasks while preserving write order. Number of tasks trades prefetch lead time against cache pressure and scheduler work.
 
@@ -210,7 +210,7 @@ The input interval `[b,e)@newCV` may overlap a previous history interval whose b
 
 After insertion, the scan walks entries in key order. Expired entries are erased without reading their key bytes. Fully covered live entries are erased. If the first survivor is only partially covered, its begin becomes `e` while its old end and CV remain. For example, `[10,40)@100`, `[50,90)@110` plus `[30,60)@120` produce `[10,30)@100`, `[30,60)@120` and `[60,90)@110`, including coverage of the old gap `[40,50)`. When a leaf minimum changes, the surviving separator is propagated upward. Removing the last entry of a nonroot leaf unlinks it, repairs the parent and neighbour chain, and may remove empty ancestors.
 
-The v3.8 forward scan compares and erases covered entries individually. It does **not** retire a fully covered interior leaf as one operation. The later v3.17 experiment added that different operation and is not part of the selected tree.
+Final v3's forward scan compares and erases covered entries individually. It does **not** retire a fully covered interior leaf as one operation. The v3.17 experiment added that different operation and is not part of the selected tree.
 
 ## 7. Capacity reservation and proactive splits
 
@@ -258,13 +258,13 @@ The oldest task validates its saved destination, then calls `reserveWrite`. If t
 
 ## 8. Speculative destinations, pointer safety and structural repair
 
-A prepared destination from `checkReads` is a hint, not a guarantee that its pointers and rank will remain valid. Older write tasks may insert, erase, split or remove leaves, and a pool reservation may reclaim history. Before the oldest task consumes saved leaf or key pointers, it checks its representative, destination anchor, leaf mutation counter and reclaim cutoff. If no relevant fact changed, the saved leaf-search position can be reused. If a younger task's destination was invalidated, it remains parked until oldest and then restarts search in the current destination leaf, issuing a new leaf hint.
+A prepared destination from `checkReads` is a hint, not a guarantee that its pointers and rank will remain valid. Older write tasks may insert, erase, split or remove leaves, and a pool reservation may reclaim history and reuse the freed block. Before the oldest task consumes a saved rank or leaf pointer, it checks the representative and destination anchor, the reclaim cutoff, and the saved leaf generation and mutation epoch. The rank can be reused only while the block still holds that leaf generation and the leaf has not mutated since the rank was computed. Otherwise the task restarts its search. Because node and key-block generation spaces are disjoint, reuse of the same pool block for keys cannot make this leaf check pass. A younger task remains parked until oldest before performing any required restart.
 
 A split can leave a write begin in the original left leaf while invalidating only its rank. It can also place the insertion point beyond that leaf's new upper boundary. A right-neighbour check then moves the search into the new right leaf. Splits and leaf removal redirect prepared write destinations and the active cursor; subsequent validation still precedes pointer use. A saved split candidate is separately guarded by its split epoch. A changed epoch requires rebuilding that candidate from the parents.
 
 ![A write task validates its speculative destination before reusing a saved search position or following a changed leaf boundary.](figs/fig-v3-destination-validation.png)
 
-*Figure 21. A still-valid destination reuses the searched position. An older split can invalidate the rank while the insertion leaf remains the same; another split can require a right-neighbour correction. Saved leaf and key pointers are checked before use.*
+*Figure 21. A still-valid destination reuses the searched position. An older write can change the rank while the insertion leaf remains allocated; reclamation can free and reuse the block; and a split can require a right-neighbour correction. The saved generation and mutation epoch distinguish all three cases before the rank is used.*
 
 During `checkReads`, no write insertion or key-block reclamation occurs, and queued empty leaves are not released until tasks finish. During write maintenance, a CV check precedes any dereference of possibly reclaimed key bytes. The two protections solve different lifetime problems: stable traversal pointers during reads, and renewed validation after speculative write searches.
 
@@ -276,12 +276,12 @@ Nodes participate in an intrusive age list ordered by a conservative maximum CV.
 
 `reclaimOldest` chooses the older of the oldest node and oldest key block, raises `reclaimCV_` monotonically to cover the reclaimed age, releases eligible nodes and possibly whole subtrees, and releases eligible key blocks. A subtree is detached only when its conservative maximum CV says no newer history will be lost. `reclaimUntilAvail(n)` repeats until enough free blocks exist or no eligible history remains. Logical expiry can leave descriptors in surviving nodes after their bytes are reclaimed: separator refresh, leaf cleanup and CV-first tests are what prevent those descriptors from becoming unsafe comparisons. Because nodes and key blocks share a pool, releasing either can satisfy a later allocation of the other kind.
 
-The local pool policy cannot by itself guarantee an old transaction's read version remains usable. Transaction admission must reject RVs below the resulting `reclaimCV_`, and protection of active reads and Storage Server data versions must be coordinated outside this component. v3.8 uses this age-based mechanism; it has no separate queue of batched `reclaimOldest` tasks.
+The local pool policy cannot by itself guarantee an old transaction's read version remains usable. Transaction admission must reject RVs below the resulting `reclaimCV_`, and protection of active reads and Storage Server data versions must be coordinated outside this component. Final v3 uses this age-based mechanism; it has no separate queue of batched `reclaimOldest` tasks.
 
 ## 10. Costs, limits and selected configuration
 
 Key routing within a node is logarithmic in the node's child count for an individual begin, while recursive partitioning shares routing comparisons among many begins. Descent can incur separator repair and local cleanup. Read ranges add predecessor and forward-scan work, potentially spanning many leaves. A write adds key copying, covered-entry comparisons and erasures, parent metadata updates, possible split work and occasional pressure reclamation. Prefetch can overlap latency but cannot force cache residency or make dependent comparisons independent.
 
-The two-by-eight write configuration is a latency/locality trade-off within one core, not a parallel thread count. The default read task capacity `BTREE_V3_TASKS=16` in the integration is a separate setting. `BTreeV3.cpp` compiles resolver1 within the `btree_v3` namespace and the native ConflictSet adapter selects it. The selected source tag identifies v3.8; experimental later versions change this design and are outside the snapshot.
+The two-by-eight write configuration is a latency/locality trade-off within one core, not a parallel thread count. The default read task capacity `BTREE_V3_TASKS=16` in the integration is a separate setting. `BTreeV3.cpp` compiles resolver1 within the `btree_v3` namespace and the native ConflictSet adapter selects it. Tag `resolver-v3-final` identifies the selected release; the older tag `resolver-v3` identifies the v3.8 milestone, and the later experimental branches are outside this design.
 
 Correctness requires matching conflict bits, transaction decisions, too-old counts and accepted write order for half-open boundaries, equal begins, expired separators, long and cross-block keys, splits, removed leaves, right-neighbour redirects, memory pressure and complete per-read reporting. Performance claims require measured whole workloads and the exact source and compilation configuration; the algorithmic bounds and diagrams in this document are explanations of mechanisms, not speedup claims.

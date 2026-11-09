@@ -1,6 +1,6 @@
 # Resolver design
 
-The baseline for FoundationDB internals is apple/foundationdb main at a443d3ee60. This document describes the **selected v3.8 Resolver**. Its source-specific [engineering snapshot](../resolver/v3/README.md) holds the detailed task machinery and evidence. The immutable [v2 snapshot](../resolver/v2/README.md) describes the preceding grouped-read implementation.
+The baseline for FoundationDB internals is apple/foundationdb main at a443d3ee60. This document describes the **final Resolver v3**. Its source-specific [engineering snapshot](../resolver/v3/README.md) holds the detailed task machinery and evidence. The immutable [v2 snapshot](../resolver/v2/README.md) describes the preceding grouped-read implementation.
 
 ## Objective and conflict semantics
 
@@ -29,15 +29,15 @@ At a leaf, a task buffers the first write and its destination, then checks the r
 
 The default source parameters are RESOLVER1_WRITE_GROUPS=2 and RESOLVER1_WRITE_LG=8. Write tasks interleave independent leaf searches and key prefetches. The oldest task is the only writer; younger searches park when they reach SearchReady and are woken as they become oldest. The successor group's searches start when the older group is halfway through, allowing memory requests to overlap older writes. This is a cooperative, non-preemptive scheduler within one thread, not parallel tree mutation.
 
-Before using a saved destination, a task checks representative, anchor, mutation counter and reclamation cutoff. Older writes can split or remove leaves; destinations and the active cursor are redirected, and a right-neighbour check repairs uncertain placement. ReserveWrite may reclaim history before mutation, so a changed destination causes a renewed search. Split candidates are reused only while their epoch remains valid.
+Before using a saved destination, a task checks representative, anchor, reclamation cutoff and the leaf generation and mutation epoch saved with that write rank. Older writes can split or remove leaves; reclamation can free and reuse their blocks; and another write can change ranks in a surviving leaf. Any mismatch causes a renewed search. Node and key-block generation values occupy disjoint spaces, so a recycled key block cannot validate a stale leaf reference. Destinations and the active cursor are redirected, and a right-neighbour check repairs uncertain placement. Split candidates are reused only while their separate split epoch remains valid.
 
-The overlay inserts the new interval, preserves prior-version exteriors and removes covered entries. The selected v3.8 still scans and erases covered entries individually. A whole-interior-leaf removal experiment exists on the separate v3.17 branch, not in the current release.
+The overlay inserts the new interval, preserves prior-version exteriors and removes covered entries. Final v3 still scans and erases covered entries individually. A whole-interior-leaf removal experiment exists on the separate v3.17 branch, not in the selected release.
 
 ## Cleanup and scope
 
-Read checks may lazily refresh expired separators before referencing stored key bytes. They compact each leaf once before using stable ranks, queue empty nodes by pointer/generation and drain the queue after all tasks retire. Space pressure advances reclaimCV_ through the existing node/key allocation-age reclamation. The v3.8 design has no separate list of cleanup tasks.
+Read checks may lazily refresh expired separators before referencing stored key bytes. They compact each leaf once before using stable ranks, queue empty nodes by pointer/generation and drain the queue after all tasks retire. Space pressure advances reclaimCV_ through the existing node/key allocation-age reclamation. Final v3 has no separate list of cleanup tasks.
 
-The v3.8 source is [resolver-v3](https://github.com/ricardojimenezperis/foundationdb/tree/resolver-v3) at 55d5f98974. Two later branches preserve v3.9 and v3.10–v3.17 as experiments. The [v3 design snapshot](../resolver/v3/03-resolver-v3-design.md) gives the state machine, invariants and validation boundaries; the [v3 evaluation](../resolver/v3/06-evaluation.md) presents comparisons with FDB, v1 and v2 across sessions on Intel and AMD, each with its margin of uncertainty and its measured sources and conditions, without turning them into a general claim that v3 is faster.
+The final production source is `f866c98d8585a77280adbf44c72650f16e975f86`, published on branch [resolver-v3](https://github.com/ricardojimenezperis/foundationdb/tree/resolver-v3) and at tag [`resolver-v3-final`](https://github.com/ricardojimenezperis/foundationdb/releases/tag/resolver-v3-final). The older tag `resolver-v3` records the v3.8 milestone at `55d5f98974`; the v3.9 and v3.10–v3.17 branches remain experiments based on that milestone. The [v3 design snapshot](../resolver/v3/03-resolver-v3-design.md) gives the state machine and invariants; the [final evaluation](../resolver/v3/06-evaluation.md) reports the consolidated correctness and HugeTLB performance evidence.
 
 ## Alternatives and trade-offs
 

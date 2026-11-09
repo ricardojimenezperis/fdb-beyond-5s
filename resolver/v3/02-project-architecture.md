@@ -1,4 +1,4 @@
-# Beyond-5s · Architecture at the resolver v3 milestone
+# Beyond-5s · Architecture of final Resolver v3
 
 [Index](README.md)
 
@@ -15,7 +15,7 @@ TempConflictBTree is the in-memory conflict-history component. It stores write-c
 | Storage Servers | Retain database versions needed by read versions; separate implementation |
 | Commit Proxies / GRV | Admission and protection of read versions; separate protocol |
 
-The two resolver phases are sequential. checkReads may clean leaf entries and refresh separators, but does not add writes or reclaim key blocks while the read scheduler is running. Its write-leaf records remain valid for the immediately following addWrites call only, with explicit redirection/validation when a leaf changes. addWrites may reserve space and reclaim history. The oldest write applies each overlay and maintains leaf links, separators and split state.
+The two resolver phases are sequential. checkReads may clean leaf entries and refresh separators, but does not add writes or reclaim key blocks while the read scheduler is running. Its write-leaf records are consumed only by the immediately following addWrites call. Each saved rank carries the destination leaf generation and mutation epoch; addWrites searches again after leaf reclamation, pool-block reuse or an intervening write invalidates it. Node and key-block generations are disjoint. addWrites may reserve space and reclaim history. The oldest write applies each overlay and maintains leaf links, separators and split state.
 
 The read task capacity BTREE_V3_TASKS defaults to 16 in CMake. The write task defaults are RESOLVER1_WRITE_GROUPS=2 and RESOLVER1_WRITE_LG=8 in the source; these parameters control separate schedulers. 
 
