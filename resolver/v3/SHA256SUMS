@@ -1,7 +1,7 @@
 f4a382d44bf045e5aa9fc3c0a5bd217855a4e52896840b812b0015341a8b8b39  03-resolver-v3-design.md
 aba9cc43b2a9e2fae3e17fe6999420944c464ac9cbd619cbbd2dc71faebcbdf3  figs/fig-v3-accepted-union.png
 5dde4e0e8adde02f2b141da2007dd185e64101bf8becc4ae9665aca0d0d6f237  figs/fig-v3-batch-phases.png
-b49af2ead27588a9f5ffd1ddd1684ae3f5dadf977ecb5418bd4ac61d5bc89d4d  figs/fig-v3-destination-validation.png
+677074ba7df34ed0ba1b4e221fb8db6b1dc78699badab0da00848dd0aba8f44f  figs/fig-v3-destination-validation.png
 3c31e4b343f6f300a8c67db9babf0fc4e9f02106e21395240e7c711f4aa7881d  figs/fig-v3-hugetlb.png
 d2d64247903cf0918602d663869e542ed43ce279d1c52d8e890198a8d0659991  figs/fig-v3-mixed-descent.png
 3430381eeb98fb4a73b042fe287ee833903b5714486645f0ae3bfe9c509b39c2  figs/fig-v3-reserve-before-mutate.png
