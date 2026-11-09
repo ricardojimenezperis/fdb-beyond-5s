@@ -61,11 +61,11 @@ A point interval `[k,k\0)` stores the endpoint `k\0` once and treats its prefix 
 
 Logical expiry, physical reclamation and pointer validity are different facts. An entry with CV at or below the cutoff may still occupy a leaf. A key block has a conservative maximum CV for its records and can remain allocated after some records expire. Key blocks are reclaimed in allocation order; the first-block generation in a nonempty key reference is valid only if it exceeds `lastReclaimedKeyGeneration_`. This test does not dereference a possibly reused block. While the first block of a record survives, continuation blocks cannot have been reclaimed ahead of it. Before reading an expired entry or separator, the algorithm tests its CV and refreshes or skips it instead of dereferencing freed key bytes.
 
-Node generations serve another purpose: deferred cleanup stores `(node,generation)`, checks that pair before releasing the node, and skips duplicate records for a node already released. Final v3 assigns node and key-block generations from disjoint value spaces. They cannot compare equal merely because a pool block was released in one role and reused in the other.
+Node generations serve another purpose: deferred cleanup stores `(node,generation)`, checks that pair before releasing the node, and skips duplicate records for a node already released. Final v3 assigns node and key-block generations from disjoint value spaces. The node store starts at 1, the key store starts at 2, and each advances its counter by two, so node generations are odd and key-block generations are even. Required allocations throw before a 64-bit counter can wrap and reuse a value; an optional spare open key block is not allocated once its counter is exhausted. A node and a key block therefore cannot compare equal merely because one pool address was released in one role and reused in the other.
 
 ![Key-block generations validate range references, while node generations validate deferred cleanup records.](figs/fig-v3-generation.svg)
 
-*Figure 4. A stored range reference is checked against the last reclaimed key-block generation without reading its target. Node generations independently guard deferred empty-leaf cleanup against duplicate or stale records.*
+*Figure 4. A stored range reference is checked against the last reclaimed key-block generation without reading its target. Node generations independently guard deferred empty-leaf cleanup against duplicate or stale records. Odd node generations and even key-block generations make cross-role reuse fail the generation check.*
 
 ### Reducing TLB misses with HugeTLB
 
@@ -260,11 +260,42 @@ The oldest task validates its saved destination, then calls `reserveWrite`. If t
 
 A prepared destination from `checkReads` is a hint, not a guarantee that its pointers and rank will remain valid. Older write tasks may insert, erase, split or remove leaves, and a pool reservation may reclaim history and reuse the freed block. Before the oldest task consumes a saved rank or leaf pointer, it checks the representative and destination anchor, the reclaim cutoff, and the saved leaf generation and mutation epoch. The rank can be reused only while the block still holds that leaf generation and the leaf has not mutated since the rank was computed. Otherwise the task restarts its search. Because node and key-block generation spaces are disjoint, reuse of the same pool block for keys cannot make this leaf check pass. A younger task remains parked until oldest before performing any required restart.
 
+For a task with a non-null saved leaf, the rank-validity condition is:
+
+```text
+savedLeafIsCurrent(t) =
+    odd(t.savedLeaf.header.generation)
+    && t.savedLeaf.header.generation == t.savedLeafGeneration
+    && t.savedLeaf.mutationEpoch == t.savedLeafEpoch
+```
+
+`saveLeafRevision` records both values whenever a search establishes or resets the task's leaf. A task with no saved leaf has no leaf rank to reuse. The generation field is inspected first. Released node blocks have that generation cleared; a block reused for key storage has an even generation. C++ short-circuit evaluation therefore rejects both cases before reading the leaf-only mutation epoch. A surviving leaf keeps its odd generation, but every insertion, erasure or cleaning change increments its mutation epoch, invalidating ranks computed against the former physical order.
+
 A split can leave a write begin in the original left leaf while invalidating only its rank. It can also place the insertion point beyond that leaf's new upper boundary. A right-neighbour check then moves the search into the new right leaf. Splits and leaf removal redirect prepared write destinations and the active cursor; subsequent validation still precedes pointer use. A saved split candidate is separately guarded by its split epoch. A changed epoch requires rebuilding that candidate from the parents.
 
 ![A write task validates its speculative destination before reusing a saved search position or following a changed leaf boundary.](figs/fig-v3-destination-validation.png)
 
 *Figure 21. A still-valid destination reuses the searched position. An older write can change the rank while the insertion leaf remains allocated; reclamation can free and reuse the block; and a split can require a right-neighbour correction. The saved generation and mutation epoch distinguish all three cases before the rank is used.*
+
+### The v3.8 failure and the final validation path
+
+The defect fixed after the v3.8 milestone followed this sequence:
+
+1. `checkReads` prepared a destination leaf and rank for a later accepted write.
+2. An older write in the same `addWrites` call reserved space. Pressure reclamation released that prepared leaf, and its pool block became free or was reused.
+3. V3.8 could continue with the obsolete rank because the saved position did not carry enough leaf identity and revision state.
+4. In the two-page regression, the 2×8 configuration consequently lost 60 accepted writes; the 2×4 configuration aborted.
+
+Final v3 records the leaf generation and mutation epoch with the rank. A released block has generation zero, a block reused for keys has an even generation, and a different node allocation has a different odd generation. If the leaf survives but an earlier write changes its slots or order, its mutation epoch changes. Any of these cases makes `savedLeafIsCurrent` false. A younger task parks; once it becomes the head task, it resolves the current representative and destination, searches the current tree and saves a new revision before proceeding. The right-neighbour check remains a separate logical correction for a split boundary.
+
+The following table connects the final invariants to their component evidence. It is a traceability map, not a claim that every Boolean condition is isolated independently; the coverage catalog records the remaining branch-level limits.
+
+| Risk | Final protection | Component evidence |
+|---|---|---|
+| Prepared leaf reclaimed or its block reused | Odd leaf generation must equal the saved generation; otherwise the head task searches again | `AddWritesKeepsWritesAfterReclamationFreesAPreparedLeaf` |
+| Surviving leaf changed by an earlier write or cleanup | Saved mutation epoch must equal the leaf's current epoch | `InsertAtFillsRootLeaf`, `EraseAtKeepsLeaf`, `CleanExpiredRemovesOnlyExpiredEntries`, and the reclamation regression above |
+| Read and write begins interleaved in one batch | Each accepted write retains the destination belonging to its own first accepted begin; rejected and too-old writes are discarded | `CheckReadsAndAddWritesResolveAMixedBatch` |
+| Overlapping, adjacent or empty writes in a mixed batch | Accepted intervals are unioned by endpoint index and applied once, without admitting discarded writes | `AddWritesMergesOverlappingWritesOfAMixedBatch` |
 
 During `checkReads`, no write insertion or key-block reclamation occurs, and queued empty leaves are not released until tasks finish. During write maintenance, a CV check precedes any dereference of possibly reclaimed key bytes. The two protections solve different lifetime problems: stable traversal pointers during reads, and renewed validation after speculative write searches.
 
