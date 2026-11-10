@@ -48,12 +48,21 @@ route conflict checks after load balancing. If a Commit Proxy discards
 old assignments, it will advance its routing-history boundary and reject
 commits requiring information it no longer holds.
 
-Retention does not depend on a global minimum read version, client leases
-or Master coordination as in the original design. 
-Each component enforces the boundary of its own
-available history. These boundaries need not coincide: a transaction may successfully read from a Storage Server but
-later receive `transaction_too_old` when committing through a Resolver
-that has already recycled the required conflict history.
+Each component enforces the boundary of its own available history.
+These boundaries need not coincide: a transaction may successfully read
+from a Storage Server but later receive `transaction_too_old` when
+committing through a Resolver that has already recycled the required
+conflict history.
+
+After the Storage Server history, the transaction-management path will
+track and propagate minRV, the oldest read version still needed by an
+active transaction. A Storage Server will then be able to reclaim a
+historical page once no active transaction needs its contents. Configured
+budgets remain hard limits: if capacity runs out while an older
+transaction is active, the Storage Server still advances its boundary.
+minRV is not implemented yet. The Resolver does not need it: it retains
+conflict history by budget, independently of minRV, and rejects commits
+whose read version is below its validation boundary.
 
 
 ### 1.2 Recovery and failures
@@ -105,8 +114,8 @@ grouped-read Resolver (v2) has its snapshot under
 [`resolver/v2/`](../resolver/v2/README.md). The Resolver with mixed read/write
 routing and interleaved write tasks (v3), which the Resolver design now
 describes, has its snapshot under [`resolver/v3/`](../resolver/v3/README.md).
-Storage Server history and system-wide support for extended transactions
-remain implementation work. The descriptions above specify the intended design.
+Storage Server history, minRV tracking and system-wide support for
+extended transactions remain implementation work. The descriptions above specify the intended design.
 
 ## 3. Validation and benchmarking
 
