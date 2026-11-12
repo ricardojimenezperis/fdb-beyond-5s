@@ -35,13 +35,16 @@ Each Resolver retains conflict history within a configured memory
 budget. As capacity is needed, it releases its oldest key blocks and B+
 nodes and advances its validation boundary.
 
-Each Storage Server will keep current values in a persisted single-version
-tree and historical versions separately in pages. Two circular arrays,
-one in memory and one on disk, will hold those pages. Their capacities
-will be configurable and shared by all shards on that Storage Server.
-Pages will be recycled in allocation order as space is needed. Recycling
-will advance the availability boundaries of the shards whose history is
-discarded.
+Each Storage Server will keep only the latest committed state of each key
+in its key-value store and append replaced and deleted values to history
+pages built from fixed 8 KiB blocks. Recent pages will stay in memory;
+older pages will spill to fixed slots in a preallocated disk area. The
+memory and disk budgets will be configurable and shared by all shards on
+that Storage Server. A page will be reclaimed whole, without visiting its
+records, when its history is no longer needed or when a budget is
+exhausted. In the second case the Storage Server retires the page with
+the oldest reclamation boundary and advances the availability boundaries
+of the shards whose history is discarded.
 
 Commit Proxies will retain the history of Resolver assignments needed to
 route conflict checks after load balancing. If a Commit Proxy discards
