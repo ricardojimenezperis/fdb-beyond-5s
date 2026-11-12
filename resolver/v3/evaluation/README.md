@@ -6,7 +6,7 @@ that produce every table, and the write-group sweeps of both machines. Each mach
 file combines their resolver results. The one directory with data of both machines is the AMD dependent-memory
 campaign, which carries its Intel reference.
 
-These records are intentionally unchanged historical evidence. Their 228-test count and timing conclusions do not describe final Resolver v3. The selected final evaluation is [the current summary](../06-evaluation.md), backed by the [consolidated report](https://github.com/ricardojimenezperis/foundationdb/blob/resolver-v3/fdbserver/resolver/resolver1/evaluation/REPORT.md) and the [`resolver-v3-final` release assets](https://github.com/ricardojimenezperis/foundationdb/releases/tag/resolver-v3-final).
+These records are intentionally unchanged historical evidence. Their 228-test count and timing conclusions do not describe final Resolver v3. The selected final evaluation is [the current summary](../06-evaluation.md), backed by the [consolidated report](https://github.com/ricardojimenezperis/foundationdb/blob/resolver-v3/fdbserver/resolver/resolver1/evaluation/REPORT.md) and the [`resolver-v3-final` release assets](https://github.com/ricardojimenezperis/foundationdb/releases/tag/resolver-v3-final). The final AMD long-trace timing, two pairs recorded on 2026-11-10, is the `resolver-v3-final-amd-long-trace.zip` asset of that release; it is not part of these records.
 
 The measured commit is `d6bba393b92ca4dcf058a024dfcf890733d695c3`; the published commit `55d5f98974` (historical tag
 [`resolver-v3`](https://github.com/ricardojimenezperis/foundationdb/releases/tag/resolver-v3)) has the same tree,

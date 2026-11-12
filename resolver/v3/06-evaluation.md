@@ -67,7 +67,16 @@ On Intel, two paired runs give:
 
 The median is **0.7723**. The two pairs agree within 0.2%, but two pairs do not justify a ±1% precision claim.
 
-AMD repeats the complete logical and retention result with one measured pair: FDB 60.500 s and v3 57.061 s. A single pair cannot distinguish a reproducible timing difference from run noise, so **no AMD long-trace performance ratio is inferred**. The times remain published as observations, not as a performance conclusion.
+On AMD, a separate session with the same protocol (a warm-up of each arm, excluded, then two pairs in opposite orders) gives:
+
+| pair | order | FDB `totalS` | v3 `totalS` | v3/FDB | v3 takes less time |
+|---|---|---:|---:|---:|---:|
+| 1 | FDB → v3 | 60.770 s | 56.976 s | 0.937564 | 6.24% |
+| 2 | v3 → FDB | 60.648 s | 57.243 s | 0.943857 | 5.61% |
+
+The median is **0.940710**: v3 takes 5.93% less time. The two pairs differ by 0.67% of the median, and two pairs do not justify a ±1% precision claim. Per pair, against FDB's total in the same pair, v3's read phase adds 35.5–36.4%, while its write phase saves 29.2–29.4% and the absence of cleanup saves 12.2–12.3%. The difference is concentrated in the read phase; its cause has not been measured. The session, its HugeTLB evidence and its differences from the Intel protocol are in the [`resolver-v3-final-amd-long-trace.zip`](https://github.com/ricardojimenezperis/foundationdb/releases/tag/resolver-v3-final) release asset. The earlier single AMD pair (FDB 60.500 s, v3 57.061 s) remains a historical observation of correctness and retention and is not pooled with this session. Seconds are not compared between AMD and Intel.
+
+In the production-shaped 5,400-second trace, final v3 retains 2.20× more conflict history under the same 6 GiB budget and takes less processing time than FoundationDB on both testbeds: 0.77× on Intel and 0.94× on AMD. The AMD result is the median of two opposite-order pairs that differ by 0.67%.
 
 ## Cost of the stale-write-rank fix
 
@@ -82,4 +91,5 @@ The published configuration remains 2×8. Common HugeTLB campaigns on AMD and In
 - Page mode is not isolated from the data structure; the measurements compare published deployment configurations.
 - The cause of the conflictset-ranges ratios was not profiled.
 - Cold-cache behavior is not measured.
+- Why v3's read phase weighs more on AMD than on Intel in the long trace is not measured.
 - Correctness, recovery, simulation, sanitizer and mutant results are summarized in [Validation and evidence](05-validation-and-evidence.md) and specified in the consolidated report.

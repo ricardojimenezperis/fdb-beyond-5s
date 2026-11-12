@@ -36,10 +36,10 @@ On Intel, `fdbserver` built from `18260afe` passes:
 - 378/380 runs in both v3 and unmodified-FDB simulation arms, with the same two upstream `IncrementTest` failures and zero decision mismatches across 4,830,024 transactions;
 - the common workload against 11 mutants, detecting six and explicitly recording the five not detected.
 
-The long-trace runs on Intel and AMD agree with FDB in every one of 172,800 batches. Across all ten runs they share offered hash `11334b1aea22e641` and decisions hash `5001114085b550fb`, with no rejection for the window or memory.
+The long-trace runs on Intel and AMD agree with FDB in every one of 172,800 batches. Across all sixteen runs they share offered hash `11334b1aea22e641` and decisions hash `5001114085b550fb`, with no rejection for the window or memory.
 
 ## Evidence boundary
 
-The complete report and the seven release assets are authoritative for final v3. Every public performance figure uses final v3 with its complete history pool in HugeTLB; FDB, v1 and v2 use their native ordinary-memory implementations. The comparison represents those deployed configurations and does not isolate page mode.
+The complete report and the release assets are authoritative for final v3. Every public performance figure uses final v3 with its complete history pool in HugeTLB; FDB, v1 and v2 use their native ordinary-memory implementations. The comparison represents those deployed configurations and does not isolate page mode.
 
 The evidence retained under [`evaluation/`](evaluation/README.md) belongs to the earlier v3.8 campaign. It remains reproducible historical evidence, but its 228-test count, cross-session timing ratios and v3.8 conclusions are superseded by the final report. Historical files are not rewritten to look as though they measured the final code.
