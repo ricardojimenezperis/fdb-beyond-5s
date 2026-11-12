@@ -1,6 +1,6 @@
 # Final Resolver v3 · Validation and evidence
 
-[Index](README.md) · [Consolidated report](https://github.com/ricardojimenezperis/foundationdb/blob/resolver-v3/fdbserver/resolver/resolver1/evaluation/REPORT.md) · [Release assets](https://github.com/ricardojimenezperis/foundationdb/releases/tag/resolver-v3-final)
+[Index](README.md) · [MC/DC report](https://github.com/ricardojimenezperis/foundationdb/blob/resolver-v3/fdbserver/resolver/resolver1/tests/MCDCCoverage.md) · [Consolidated report](https://github.com/ricardojimenezperis/foundationdb/blob/resolver-v3/fdbserver/resolver/resolver1/evaluation/REPORT.md) · [Release assets](https://github.com/ricardojimenezperis/foundationdb/releases/tag/resolver-v3-final)
 
 ## Source identities
 
@@ -10,15 +10,19 @@
 | Final production code | `f866c98d8585a77280adbf44c72650f16e975f86` / `03766c182616a192e38fb713ed3b9124ec428b39` | Stale-write-rank fix; no later commit changes production |
 | Regression test | `18260afe5f80e00ae2b5cd4952f49522c07cbd0e` / `793a3e13cbf282dde84ea7673e423e35e46bbb23` | Fix regression, catalogs and evidence |
 | Mixed-batch tests | `2a68fc9b90670bea84c7a458e85d582c7f4eb816` / `c2b47f360d39af8e5728867b37dcd99af5f746ab` | Mixed read/write batches; tests only |
-| Published branch head | `027ddeb8b79e7092999135de176d82e23b1c8da0` / `75a1002a97baf145efd89a2d851c7d792bcfa258` | Tag `resolver-v3-final`; final code, tests, catalogs and consolidated evaluation |
+| Final release | `027ddeb8b79e7092999135de176d82e23b1c8da0` / `75a1002a97baf145efd89a2d851c7d792bcfa258` | Tag `resolver-v3-final`; final code, tests, catalogs and consolidated evaluation |
+| AMD long-trace result | `1233986b4365db2d5f9784ad382d667e4f2cc593` / `f9cdf90cb54bba9b294820c3f6b89847a2441ad8` | Documentation only |
+| MC/DC tests | `02d354f928143a45bb51cada4f06da11da628589` / `c23e51ad3c71a012360f483824afc107dd1de0c7` | Eight tests for MC/DC coverage; tests only |
+| Published branch head | `68c9bc35013a79c495e86507425f12bad41be299` / `b7a66946e04eba577fbdcd056d8f08c6fb801ad0` | MC/DC report, evidence and updated component catalogs |
 
 The older tag `resolver-v3` remains at v3.8. It is an immutable historical identity, not the selected final release.
 
 ## Component validation
 
-- The suite has **232 tests**: 15 PagePool, 41 KeyStore, 48 BNodeStore and 128 TempConflictBTree.
+- The suite has **240 tests**: 19 PagePool, 41 KeyStore, 48 BNodeStore and 132 TempConflictBTree. The release `resolver-v3-final` had 232; `02d354f9` adds 8 tests for MC/DC coverage.
 - The macOS and Linux matrices each run 24 configurations: two write-task shapes (2×8 and 2×4), four block sizes (1, 2, 4 and 8 KiB), and three builds.
-- Every configuration passes 232/232. macOS covers assertions, `-O2 -DNDEBUG`, and UBSan with Guard Malloc. Linux covers assertions, `-O2 -DNDEBUG`, and ASan/UBSan. Neither matrix reports a warning or sanitizer failure.
+- Every configuration passes 240/240. macOS covers assertions, `-O2 -DNDEBUG`, and UBSan with Guard Malloc. Linux covers assertions, `-O2 -DNDEBUG`, and ASan/UBSan. Neither matrix reports a warning or sanitizer failure.
+- [MC/DC coverage](https://github.com/ricardojimenezperis/foundationdb/blob/resolver-v3/fdbserver/resolver/resolver1/tests/MCDCCoverage.md), measured with clang 20.1.8 on the default 2×8 build: 153 of 210 conditions show an independence pair (72.86%). The report classifies each of the other 57 conditions and keeps assertion conditions in the denominator. The `RESOLVER1_WRITE_LG=0` build is measured separately and is not added to these figures.
 - The mixed-batch tests combine admitted, conflicting and too-old transactions and cover empty, adjacent and overlapping writes.
 
 ## The v3.8 defect and final fix

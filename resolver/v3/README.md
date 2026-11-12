@@ -1,12 +1,12 @@
 # Beyond-5s · Final Resolver v3 engineering snapshot
 
-**Published branch:** [`resolver-v3`](https://github.com/ricardojimenezperis/foundationdb/tree/resolver-v3), head `027ddeb8b79e7092999135de176d82e23b1c8da0`.
+**Published branch:** [`resolver-v3`](https://github.com/ricardojimenezperis/foundationdb/tree/resolver-v3), head `68c9bc35013a79c495e86507425f12bad41be299`.
 
 **Final release:** [`resolver-v3-final`](https://github.com/ricardojimenezperis/foundationdb/releases/tag/resolver-v3-final).
 
 **Production code:** `f866c98d8585a77280adbf44c72650f16e975f86`, tree `03766c182616a192e38fb713ed3b9124ec428b39`.
 
-**Tests:** `18260afe5f80e00ae2b5cd4952f49522c07cbd0e` and `2a68fc9b90670bea84c7a458e85d582c7f4eb816`; neither changes production code.
+**Tests:** `18260afe5f80e00ae2b5cd4952f49522c07cbd0e`, `2a68fc9b90670bea84c7a458e85d582c7f4eb816` and `02d354f928143a45bb51cada4f06da11da628589`; none changes production code. The suite has 240 tests and passes 240/240 in 48 configurations. [MC/DC coverage](https://github.com/ricardojimenezperis/foundationdb/blob/resolver-v3/fdbserver/resolver/resolver1/tests/MCDCCoverage.md): 153 of 210 conditions (72.86%).
 
 **Configuration:** two groups of eight write tasks, with the conflict-history pool in HugeTLB for every published performance figure.
 
@@ -33,6 +33,6 @@ The [v2 snapshot](../v2/README.md) remains immutable. The [current Resolver desi
 
 ## Version identities
 
-V3.8, commit `55d5f98974b352f3a124439ae86beb0f8b7ca76d` and tag `resolver-v3`, is the historical milestone from which the final fix and the experimental branches descend. Validation after that milestone found that reclamation could invalidate a saved write rank while leaving it apparently reusable. The final production commit `f866c98d` corrects that defect; `18260afe` supplies its regression test and `2a68fc9b` adds mixed-batch tests. The published branch ends in documentation merge `027ddeb8`, whose tree contains the final code, tests, catalogs and evaluation.
+V3.8, commit `55d5f98974b352f3a124439ae86beb0f8b7ca76d` and tag `resolver-v3`, is the historical milestone from which the final fix and the experimental branches descend. Validation after that milestone found that reclamation could invalidate a saved write rank while leaving it apparently reusable. The final production commit `f866c98d` corrects that defect; `18260afe` supplies its regression test, `2a68fc9b` adds mixed-batch tests and `02d354f9` adds MC/DC coverage tests. The release tag `resolver-v3-final` stays at documentation merge `027ddeb8`, whose tree contains the final code, tests, catalogs and evaluation. The branch continues with the AMD long-trace result (`1233986b`), the MC/DC tests (`02d354f9`) and their report and evidence (`68c9bc35`), none of which changes production code.
 
 The [mapping](mapping.tsv) records the curated v3.0–v3.17 history and the final fix. The v3.9 fast-path experiment and the v3.10–v3.17 experimental line still branch directly from v3.8; neither replaces final v3.
