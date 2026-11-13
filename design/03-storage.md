@@ -4,6 +4,29 @@
 **Date:** 12 November 2026  
 **Scope:** Storage Server MVCC representation and reclamation
 
+## Baseline and current behaviour
+
+The design baseline for existing FoundationDB internals is
+`apple/foundationdb` main at `a443d3ee60`.
+
+At that baseline, a Storage Server combines durable state in its selected
+storage engine with newer mutations retained in an in-memory `VersionedMap`.
+Point and range reads select the tree version for the requested read version
+and merge it with the durable state. The retained window is bounded by
+`MAX_READ_TRANSACTION_LIFE_VERSIONS`; as `oldestVersion` advances, reads below
+it return `transaction_too_old`.
+
+`forgetVersionsBeforeAsync` removes obsolete `VersionedMap` roots and schedules
+nodes that are no longer referenced for deferred destruction, yielding after
+bounded cleanup work. The Storage Server does not call
+`VersionedMap::compact()` for this reclamation.
+
+The paged-history path described below is not implemented yet. Its row codec,
+page pool, spill path, per-shard availability boundaries, shard transfer and
+end-to-end validation remain implementation work behind a configuration gate.
+This document supersedes the earlier draft based on two circular arrays and
+allocation-order recycling.
+
 ## 1. Objective
 
 FoundationDB Storage Servers currently retain several committed versions in an
@@ -686,6 +709,16 @@ The design distinguishes:
 
 All are monotonic during a shard's local lifetime. `minRV` drives normal
 garbage collection; reclaiming a page does not cause `minRV` to advance.
+
+During feature-gated implementation stages 3 to 7, the existing Storage Server
+`oldestVersion` is the temporary reclamation floor. The server already rejects
+reads below that version, so reclaiming pages whose `maxCommitVersion` is below
+`oldestVersion` preserves the baseline read semantics. Tests may inject a
+synthetic floor. This does not make `oldestVersion` the final minRV protocol:
+it retains the legacy fixed-window behaviour. Stage 8 replaces this temporary
+input with cluster-wide `minRV`, so history is retained according to active
+reads. Capacity retirement may still advance a shard's `oldestAvailableRV`
+above either floor.
 
 ### 8.2 Reclaiming history below minRV
 

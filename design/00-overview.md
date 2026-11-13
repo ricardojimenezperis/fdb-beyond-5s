@@ -40,11 +40,14 @@ in its key-value store and append replaced and deleted values to history
 pages built from fixed 8 KiB blocks. Recent pages will stay in memory;
 older pages will spill to fixed slots in a preallocated disk area. The
 memory and disk budgets will be configurable and shared by all shards on
-that Storage Server. A page will be reclaimed whole, without visiting its
-records, when its history is no longer needed or when a budget is
-exhausted. In the second case the Storage Server retires the page with
-the oldest reclamation boundary and advances the availability boundaries
-of the shards whose history is discarded.
+that Storage Server. Pages will be reclaimed whole, without visiting their
+records. During the initial feature-gated implementation, the existing
+Storage Server `oldestVersion` will supply the reclamation floor, preserving
+the current read window. Once cluster-wide minRV is connected, it will replace
+that temporary fixed-window input and identify pages that no active transaction
+needs. Capacity pressure will retire the page with the oldest reclamation
+boundary and first advance the availability boundaries of the shards whose
+history is discarded.
 
 Commit Proxies will retain the history of Resolver assignments needed to
 route conflict checks after load balancing. If a Commit Proxy discards
